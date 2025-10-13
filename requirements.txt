@@ -19,6 +19,4 @@ grpcio
 python-multipart
 sounddevice
 httpx
-azure-cosmos
 opencv-contrib-python-headless
-
