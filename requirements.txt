@@ -14,3 +14,12 @@ pytest
 kagglehub
 ipykernel
 langchain_community
+google-cloud-vision
+azure-storage-blob
+google-cloud-speech
+google-cloud-core
+grpcio
+python-multipart
+sounddevice
+httpx
+opencv-contrib-python-headless
