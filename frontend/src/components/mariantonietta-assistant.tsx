@@ -26,23 +26,117 @@ export default function MariantoniettaAssistant() {
   const [currentResponse, setCurrentResponse] = useState("")
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // Simulate speech-to-text
-  const handleVoiceRecording = () => {
+  // Grabar audio y convertirlo a WAV usando Web Audio API
+  const handleVoiceRecording = async () => {
     if (!isRecording) {
       setIsRecording(true)
       setAssistantState("listening")
 
-      // Simulate recording for 3 seconds
-      setTimeout(() => {
+      // Graba audio
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const mediaRecorder = new MediaRecorder(stream)
+
+      let audioChunks: Blob[] = []
+
+      mediaRecorder.ondataavailable = (event) => {
+        audioChunks.push(event.data)
+      }
+
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunks, { type: "audio/webm" })
+        const audioBuffer = await audioBlob.arrayBuffer()
+
+        // Convertimos a WAV
+        const wavBlob = await convertToWav(audioBuffer)
+
+        // Enviamos el archivo WAV al backend
+        const formData = new FormData()
+        formData.append("file", wavBlob, "audio.wav")
+
+        const response = await fetch("http://localhost:8000/stt", {
+          method: "POST",
+          body: formData,
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          // Actualizamos el input con la transcripción
+          setInput(data.transcript)
+        } else {
+          console.error("Error al transcribir el audio.")
+        }
+
+        // Resetear el estado después de la grabación
         setIsRecording(false)
         setAssistantState("idle")
-        // Simulate transcribed text
-        const transcribedText = "Hello Mariantonieta, how are you today?"
-        setInput(transcribedText)
-      }, 3000)
+      }
+
+      mediaRecorder.start()
+
+      // Detenemos la grabación después de 5 segundos (puedes cambiar esto)
+      setTimeout(() => {
+        mediaRecorder.stop()
+      }, 5000)
     } else {
       setIsRecording(false)
       setAssistantState("idle")
+    }
+  }
+
+  // Convertir el buffer de audio a WAV usando la Web Audio API
+  const convertToWav = async (audioBuffer: ArrayBuffer) => {
+    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
+    const buffer = await audioContext.decodeAudioData(audioBuffer)
+
+    const wavData = encodeWAV(buffer)
+
+    // Crear un Blob con los datos WAV y devolverlo
+    const wavBlob = new Blob([wavData], { type: "audio/wav" })
+    return wavBlob
+  }
+
+  // Función que convierte el buffer de audio a formato WAV
+  const encodeWAV = (buffer: AudioBuffer) => {
+    const numChannels = buffer.numberOfChannels
+    const sampleRate = buffer.sampleRate
+    const samples = buffer.length
+
+    const bufferArray = new ArrayBuffer(44 + samples * 2 * numChannels) // 44 bytes para el encabezado WAV
+    const view = new DataView(bufferArray)
+
+    // Escribir encabezado WAV
+    writeString(view, 0, "RIFF")
+    view.setUint32(4, 36 + samples * 2 * numChannels, true)
+    writeString(view, 8, "WAVE")
+    writeString(view, 12, "fmt ")
+    view.setUint32(16, 16, true) // Subchunk1Size
+    view.setUint16(20, 1, true) // AudioFormat (PCM)
+    view.setUint16(22, numChannels, true)
+    view.setUint32(24, sampleRate, true)
+    view.setUint32(28, sampleRate * numChannels * 2, true) // ByteRate
+    view.setUint16(32, numChannels * 2, true) // BlockAlign
+    view.setUint16(34, 16, true) // BitsPerSample
+    writeString(view, 36, "data")
+    view.setUint32(40, samples * 2 * numChannels, true) // Subchunk2Size
+
+    // Escribir datos de audio
+    let offset = 44
+    for (let channel = 0; channel < numChannels; channel++) {
+      const channelData = buffer.getChannelData(channel)
+      for (let i = 0; i < samples; i++) {
+        const sample = Math.max(-1, Math.min(1, channelData[i])) // Normalizar entre -1 y 1
+        view.setInt16(offset, sample * 0x7fff, true) // 16 bits PCM
+        offset += 2
+      }
+    }
+
+    return new Uint8Array(bufferArray)
+  }
+
+  // Función auxiliar para escribir cadenas en el ArrayBuffer
+  const writeString = (view: DataView, offset: number, str: string) => {
+    for (let i = 0; i < str.length; i++) {
+      view.setUint8(offset + i, str.charCodeAt(i))
     }
   }
 
