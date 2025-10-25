@@ -5,6 +5,7 @@ import uvicorn
 import sys
 import os
 from typing import Dict, Any
+from api.models.main_models import QueryRequest, QueryResponse, HealthResponse
 
 # Agregar el directorio padre al path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -54,17 +55,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-class QueryRequest(BaseModel):
-    query: str
-
-class QueryResponse(BaseModel):
-    respuesta: str
-
-class HealthResponse(BaseModel):
-    status: str
-    available_models: list
-    message: str
 
 # Montar las sub-aplicaciones de los modelos
 if BITCOIN_AVAILABLE:
