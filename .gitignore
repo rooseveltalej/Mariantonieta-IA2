@@ -19,10 +19,10 @@ frontend/.vite/
 Thumbs.db
 
 # Archivos de modelos grandes (>100MB)
-models/random_forest_properties_20251017_165834.pkl
-models/*_properties_*.pkl
-models/large_*.pkl
-models/flight_delay_v1_2025-10-25.pkl
+ml_models/random_forest_properties_20251017_165834.pkl
+ml_models/*_properties_*.pkl
+ml_models/large_*.pkl
+ml_models/flight_delay_v1_2025-10-25.pkl
 
 # Archivos de modelos grandes en general (opcional - descomenta si quieres excluir todos los modelos grandes)
 # models/*.pkl

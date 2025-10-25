@@ -1,326 +1,16 @@
 from langchain_community.llms import Ollama
 import requests
 import json
+from .extract_params import (
+    extract_bitcoin_parameters,
+    extract_flights_parameters,
+    extract_properties_parameters,
+    extract_movies_parameters
+)
+from .available_models import MODELS_CONFIG
 
 llm = Ollama(model="llama3")
 
-# Configuración de modelos disponibles
-MODELS_CONFIG = {
-    "bitcoin": {
-        "endpoint": "http://localhost:8000/bitcoin/models/bitcoin/predict",
-        "description": "Para predicciones de precios de Bitcoin usando series de tiempo (Prophet), análisis temporal y tendencias futuras",
-        "available": True,
-        "response_type": "time_series_prediction"
-    },
-    "properties": {
-        "endpoint": "http://localhost:8000/properties/models/properties/predict",
-        "description": "Para predicción de precios de propiedades inmobiliarias, casas, apartamentos",
-        "available": True,
-        "response_type": "prediction"
-    },
-    "movies": {
-        "endpoint": "http://localhost:8000/movies/models/movies/recommend",
-        "description": "Para recomendaciones de películas personalizadas basadas en preferencias",
-        "available": True,
-        "response_type": "recommendation"
-    },
-    "flights": {
-        "endpoint": "http://localhost:8000/flights/models/flights/predict",
-        "description": "Para predicciones de retrasos de vuelos, análisis de puntualidad y planificación de viajes",
-        "available": True,
-        "response_type": "flight_prediction"
-    },
-    "wine": {
-        "endpoint": "http://localhost:8000/wine/classify",
-        "description": "Para clasificación de vinos basada en características químicas",
-        "available": False,
-        "response_type": "classification"
-    },
-    "churn": {
-        "endpoint": "http://localhost:8000/churn/predict",
-        "description": "Para predicción de abandono de clientes",
-        "available": False,
-        "response_type": "prediction"
-    },
-    "emotions": {
-        "endpoint": "http://localhost:8000/emotions/analyze",
-        "description": "Para análisis de emociones en texto",
-        "available": False,
-        "response_type": "classification"
-    }
-}
-
-def extract_bitcoin_parameters(query: str):
-    """
-    Extrae parámetros para el modelo Prophet de Bitcoin (series de tiempo)
-    """
-    extraction_prompt = f"""
-    Extrae información específica para predicción de Bitcoin usando Prophet del siguiente texto:
-    
-    "{query}"
-    
-    Busca y extrae SOLO los valores que se mencionen explícitamente:
-    - Fechas específicas para predicción (ej: "precio para 2025-01-15", "predice el 25 de diciembre", "qué precio tendrá el 1 de enero")
-    - Rango de fechas (ej: "próxima semana", "próximos 30 días", "siguiente mes")
-    - Número de días a predecir (ej: "próximos 7 días", "siguiente semana", "próximo mes")
-    
-    Si se menciona una fecha específica, conviértela a formato YYYY-MM-DD.
-    Si se menciona un rango relativo, calcula las fechas correspondientes desde hoy (2025-10-24).
-    
-    Responde SOLO en formato JSON válido:
-    {{
-        "dates": ["2025-01-15", "2025-01-16"],
-        "query": "predicción de precio de Bitcoin para enero 2025"
-    }}
-    
-    Si NO se mencionan fechas específicas, usa un rango de 7 días desde hoy:
-    {{
-        "dates": ["2025-10-25", "2025-10-26", "2025-10-27", "2025-10-28", "2025-10-29", "2025-10-30", "2025-10-31"],
-        "query": "predicción de precio de Bitcoin para próximos 7 días"
-    }}
-    """
-    
-    try:
-        extraction_result = llm.invoke(extraction_prompt)
-        import json
-        import re
-        from datetime import datetime, timedelta
-        
-        # Limpiar la respuesta para extraer solo el JSON
-        json_match = re.search(r'\{.*\}', extraction_result, re.DOTALL)
-        if json_match:
-            json_str = json_match.group()
-            extracted_params = json.loads(json_str)
-            
-            # Validar que las fechas estén en formato correcto
-            dates = extracted_params.get("dates", [])
-            if not dates:
-                # Generar fechas por defecto (próximos 7 días)
-                today = datetime.now()
-                dates = [(today + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(1, 8)]
-                extracted_params["dates"] = dates
-                
-            return extracted_params
-        else:
-            # Respaldo: próximos 7 días
-            today = datetime.now()
-            dates = [(today + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(1, 8)]
-            return {"dates": dates, "query": query}
-            
-    except Exception as e:
-        print(f"Error extrayendo parámetros de Bitcoin: {e}")
-        # Respaldo: próximos 7 días
-        from datetime import datetime, timedelta
-        today = datetime.now()
-        dates = [(today + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(1, 8)]
-        return {"dates": dates, "query": query}
-
-def extract_properties_parameters(query: str):
-    """
-    Extrae parámetros para predicción de precios de propiedades
-    """
-    extraction_prompt = f"""
-    Extrae características de propiedades del siguiente texto:
-    
-    "{query}"
-    
-    Busca y extrae SOLO los valores mencionados explícitamente:
-    - Baños (ej: "3 baños", "2.5 bathrooms", "4 bath")
-    - Habitaciones (ej: "4 habitaciones", "3 bedrooms", "5 bed")
-    - Pies cuadrados (ej: "2500 sq ft", "1800 pies cuadrados", "3000 square feet")
-    - Año construcción (ej: "construida en 1990", "built in 2005", "año 2010")
-    - Tamaño del lote (ej: "7000 sq ft lot", "0.5 acres", "5000 pies cuadrados de terreno")
-    - Coordenadas (ej: "latitud 34.05", "longitude -118.25")
-    - Impuestos (ej: "taxes $5000", "impuestos 4500 anuales")
-    
-    Responde SOLO en formato JSON válido:
-    {{
-        "bathroomcnt": 3.0,
-        "bedroomcnt": 4.0,
-        "finishedsquarefeet": 2500.0,
-        "yearbuilt": 1990.0,
-        "lotsizesquarefeet": 7000.0,
-        "latitude": null,
-        "longitude": null,
-        "taxamount": 5000.0
-    }}
-    
-    Si NO encuentras un valor específico, usa null.
-    """
-    
-    try:
-        extraction_result = llm.invoke(extraction_prompt)
-        import json
-        import re
-        
-        json_match = re.search(r'\{.*\}', extraction_result, re.DOTALL)
-        if json_match:
-            json_str = json_match.group()
-            extracted_params = json.loads(json_str)
-            filtered_params = {k: v for k, v in extracted_params.items() if v is not None}
-            return filtered_params
-        else:
-            return {}
-    except Exception as e:
-        print(f"Error extrayendo parámetros de propiedades: {e}")
-        return {}
-
-def extract_flights_parameters(query: str):
-    """
-    Extrae parámetros para predicción de retrasos de vuelos
-    """
-    extraction_prompt = f"""
-    Extrae información de vuelos del siguiente texto:
-    
-    "{query}"
-    
-    Busca y extrae SOLO los valores mencionados explícitamente:
-    - Fecha de vuelo (ej: "mañana", "25 de octubre", "2025-10-25", "hoy")
-    - Hora de salida (ej: "7:00 AM", "19:30", "3 p.m.", "15:00")
-    - Aeropuerto origen (ej: "SFO", "San Francisco", "LAX", "Los Angeles", "Denver", "Las Vegas")
-    - Aeropuerto destino (ej: "JFK", "Nueva York", "ORD", "Chicago")
-    - Aerolínea (ej: "United", "UA", "American Airlines", "AA", "Delta", "DL", "Southwest", "WN")
-    - Distancia (ej: "2586 km", "1500 millas") - SOLO si se menciona explícitamente
-    - Retraso en salida (ej: "retraso de 15 minutos", "sale con 20 min de atraso") - SOLO si se menciona explícitamente
-    
-    INSTRUCCIONES IMPORTANTES:
-    - Convierte códigos de aeropuertos a códigos IATA de 3 letras
-    - Convierte fechas relativas a formato YYYY-MM-DD (hoy es 2025-10-24)
-    - Convierte horas a formato HH:MM (24 horas)
-    - Si NO encuentras un valor específico, NO lo incluyas en la respuesta
-    - Para delay_at_departure usa SOLO números (ej: 15, 0, 30), NUNCA texto
-    
-    Mapeo de aerolíneas:
-    - Southwest = WN
-    - United = UA  
-    - American = AA
-    - Delta = DL
-    - JetBlue = B6
-    
-    Mapeo de aeropuertos:
-    - Denver = DEN
-    - Las Vegas = LAS
-    - San Francisco = SFO
-    - New York JFK = JFK
-    - Los Angeles = LAX
-    - Chicago = ORD
-    
-    Responde SOLO en formato JSON válido:
-    {{
-        "date": "2025-10-24",
-        "departure_time": "15:00",
-        "origin": "DEN",
-        "destination": "LAS",
-        "airline": "WN"
-    }}
-    
-    NO incluyas campos con valores null, undefined, o texto descriptivo.
-    Si no hay retraso mencionado, NO incluyas delay_at_departure.
-    """
-    
-    try:
-        extraction_result = llm.invoke(extraction_prompt)
-        import json
-        import re
-        from datetime import datetime, timedelta
-        
-        json_match = re.search(r'\{.*\}', extraction_result, re.DOTALL)
-        if json_match:
-            json_str = json_match.group()
-            extracted_params = json.loads(json_str)
-            
-            # Procesar fecha si es relativa
-            if extracted_params.get("date"):
-                date_str = extracted_params["date"]
-                if "mañana" in date_str.lower() or "tomorrow" in date_str.lower():
-                    tomorrow = datetime.now() + timedelta(days=1)
-                    extracted_params["date"] = tomorrow.strftime("%Y-%m-%d")
-                elif "hoy" in date_str.lower() or "today" in date_str.lower():
-                    today = datetime.now()
-                    extracted_params["date"] = today.strftime("%Y-%m-%d")
-            
-            # Validar y limpiar valores numéricos
-            if "delay_at_departure" in extracted_params:
-                delay_value = extracted_params["delay_at_departure"]
-                if isinstance(delay_value, str):
-                    # Intentar extraer números del texto
-                    import re
-                    numbers = re.findall(r'\d+', delay_value)
-                    if numbers:
-                        extracted_params["delay_at_departure"] = float(numbers[0])
-                    else:
-                        # Si no hay números, remover el campo
-                        del extracted_params["delay_at_departure"]
-                elif not isinstance(delay_value, (int, float)):
-                    del extracted_params["delay_at_departure"]
-            
-            if "distance" in extracted_params:
-                distance_value = extracted_params["distance"]
-                if isinstance(distance_value, str):
-                    # Intentar extraer números del texto
-                    import re
-                    numbers = re.findall(r'\d+', distance_value)
-                    if numbers:
-                        extracted_params["distance"] = float(numbers[0])
-                    else:
-                        del extracted_params["distance"]
-                elif not isinstance(distance_value, (int, float)):
-                    del extracted_params["distance"]
-            
-            # Filtrar valores null y vacíos
-            filtered_params = {k: v for k, v in extracted_params.items() 
-                             if v is not None and v != "" and v != "null"}
-            return filtered_params
-        else:
-            return {}
-    except Exception as e:
-        print(f"Error extrayendo parámetros de vuelos: {e}")
-        return {}
-
-def extract_movies_parameters(query: str):
-    """
-    Extrae parámetros para recomendaciones de películas
-    """
-    extraction_prompt = f"""
-    Extrae información para recomendaciones de películas del siguiente texto:
-    
-    "{query}"
-    
-    Busca y extrae SOLO los valores mencionados explícitamente:
-    - ID de película (ej: "película ID 5", "movie 10", "film 25")
-    - ID de usuario (ej: "usuario 15", "user 8", "mi ID es 20")
-    - Título de película (ej: "Toy Story", "Jumanji", "Heat")
-    - Género (ej: "acción", "comedia", "drama", "thriller")
-    - Número de recomendaciones (ej: "5 películas", "recomienda 3", "top 10")
-    
-    Responde SOLO en formato JSON válido:
-    {{
-        "movie_id": 5,
-        "user_id": 15,
-        "movie_title": "Toy Story",
-        "genre": "acción",
-        "num_recommendations": 5
-    }}
-    
-    Si NO encuentras un valor específico, usa null.
-    """
-    
-    try:
-        extraction_result = llm.invoke(extraction_prompt)
-        import json
-        import re
-        
-        json_match = re.search(r'\{.*\}', extraction_result, re.DOTALL)
-        if json_match:
-            json_str = json_match.group()
-            extracted_params = json.loads(json_str)
-            filtered_params = {k: v for k, v in extracted_params.items() if v is not None}
-            return filtered_params
-        else:
-            return {}
-    except Exception as e:
-        print(f"Error extrayendo parámetros de películas: {e}")
-        return {}
 
 def get_available_models():
     """Retorna lista de modelos disponibles"""
@@ -353,10 +43,10 @@ def interpretar_y_ejecutar(query: str):
     Consulta: "{query}"
 
     Modelos disponibles:
-{models_description}
+    {models_description}
 
     Modelos en desarrollo:
-{unavailable_models}
+    {unavailable_models}
 
     Responde SOLO con el nombre del modelo más apropiado ({', '.join(MODELS_CONFIG.keys())}).
     Si no hay un modelo apropiado, responde "ninguno".
@@ -378,25 +68,25 @@ def interpretar_y_ejecutar(query: str):
             
             # Extraer parámetros específicos según el modelo
             if modelo == "bitcoin":
-                bitcoin_params = extract_bitcoin_parameters(query)
+                bitcoin_params = extract_bitcoin_parameters(query, llm)
                 if bitcoin_params:
                     data.update(bitcoin_params)
                     print(f"🎯 Parámetros extraídos para Bitcoin: {bitcoin_params}")
             
             elif modelo == "flights":
-                flights_params = extract_flights_parameters(query)
+                flights_params = extract_flights_parameters(query, llm)
                 if flights_params:
                     data.update(flights_params)
                     print(f"✈️ Parámetros extraídos para Vuelos: {flights_params}")
             
             elif modelo == "properties":
-                properties_params = extract_properties_parameters(query)
+                properties_params = extract_properties_parameters(query, llm)
                 if properties_params:
                     data.update(properties_params)
                     print(f"🏠 Parámetros extraídos para Propiedades: {properties_params}")
             
             elif modelo == "movies":
-                movies_params = extract_movies_parameters(query)
+                movies_params = extract_movies_parameters(query, llm)
                 if movies_params:
                     data.update(movies_params)
                     print(f"🎬 Parámetros extraídos para Películas: {movies_params}")
@@ -405,7 +95,7 @@ def interpretar_y_ejecutar(query: str):
                 if "user_id" in data and "movie_id" in data:
                     model_config["endpoint"] = "http://localhost:8000/movies/models/movies/predict-rating"
             
-            response = requests.post(model_config["endpoint"], json=data, timeout=30)
+            response = requests.post(model_config["endpoint"], json=data, timeout=60)
             
             if response.status_code == 200:
                 result = response.json()

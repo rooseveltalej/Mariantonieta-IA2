@@ -182,7 +182,7 @@ def make_simple_flight_prediction(flight_data):
     predicted_delay = 5.0  # 5 minutos base
     
     # Factor por aerolínea (Southwest es generalmente puntual)
-    airline = flight_data.get('airline', '')
+    airline = flight_data.get('airline') or ''
     if airline == 'WN':  # Southwest
         predicted_delay = 3.0
     elif airline in ['UA', 'AA']:  # United, American
@@ -191,14 +191,14 @@ def make_simple_flight_prediction(flight_data):
         predicted_delay = 4.0
     
     # Factor por ruta (Denver-Las Vegas es ruta corta)
-    origin = flight_data.get('origin', '')
-    destination = flight_data.get('destination', '')
+    origin = flight_data.get('origin') or ''
+    destination = flight_data.get('destination') or ''
     if origin == 'DEN' and destination == 'LAS':
         predicted_delay *= 0.8  # Ruta corta, menos retrasos
     
     # Factor por hora (3 PM es hora moderada)
-    departure_time = flight_data.get('departure_time', '')
-    if '15:' in departure_time or '3:' in departure_time:
+    departure_time = flight_data.get('departure_time') or ''
+    if departure_time and ('15:' in departure_time or '3:' in departure_time):
         predicted_delay *= 1.1  # Hora moderadamente ocupada
     
     # Si hay retraso en salida
@@ -222,9 +222,25 @@ def predict_flight_delay(request: FlightPredictionRequest):
     Predice el retraso de un vuelo basado en sus características
     """
     try:
+        # Validar y corregir fecha si es necesaria
+        validated_date = request.date
+        if request.date:
+            try:
+                # Verificar si la fecha es válida
+                parsed_date = datetime.strptime(request.date, "%Y-%m-%d")
+                # Si la fecha es muy antigua, usar fecha actual
+                if parsed_date.year < 2020:
+                    validated_date = datetime.now().strftime("%Y-%m-%d")
+            except ValueError:
+                # Si la fecha no es válida, usar fecha actual
+                validated_date = datetime.now().strftime("%Y-%m-%d")
+        else:
+            # Si no hay fecha, usar fecha actual
+            validated_date = datetime.now().strftime("%Y-%m-%d")
+        
         # Preparar datos del vuelo
         flight_data = {
-            'date': request.date,
+            'date': validated_date,
             'departure_time': request.departure_time,
             'origin': request.origin,
             'destination': request.destination,
@@ -241,7 +257,7 @@ def predict_flight_delay(request: FlightPredictionRequest):
         flight_info = {
             'route': f"{request.origin} → {request.destination}",
             'airline': request.airline,
-            'departure': f"{request.date} {request.departure_time}",
+            'departure': f"{validated_date} {request.departure_time}",
             'distance_km': request.distance,
             'departure_delay': request.delay_at_departure
         }
