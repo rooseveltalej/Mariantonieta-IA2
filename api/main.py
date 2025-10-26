@@ -48,6 +48,13 @@ except ImportError as e:
     print(f"⚠️  ACV API no disponible: {e}")
     ACV_AVAILABLE = False
 
+try:
+    from .routes.avocado_api import app as avocado_app, load_avocado_model
+    AVOCADO_AVAILABLE = True
+except ImportError as e:
+    print(f"⚠️  Avocado API no disponible: {e}")
+    AVOCADO_AVAILABLE = False
+
 app = FastAPI(
     title="AI Models API Hub",
     description="API centralizada para múltiples modelos de Machine Learning",
@@ -79,6 +86,9 @@ if FLIGHTS_AVAILABLE:
 if ACV_AVAILABLE:
     app.mount("/acv", acv_app)
 
+if AVOCADO_AVAILABLE:
+    app.mount("/avocado", avocado_app)
+
 @app.get("/", response_model=HealthResponse)
 def root():
     """Endpoint principal con información de la API"""
@@ -93,6 +103,8 @@ def root():
         available_models.append("flights")
     if ACV_AVAILABLE:
         available_models.append("acv")
+    if AVOCADO_AVAILABLE:
+        available_models.append("avocado")
     
     return HealthResponse(
         status="active",
@@ -206,6 +218,22 @@ def health_check():
                 "error": str(e)
             }
     
+    # Verificar Avocado API si está disponible
+    if AVOCADO_AVAILABLE:
+        try:
+            avocado_model = load_avocado_model()
+            services_status["avocado"] = {
+                "status": "healthy",
+                "model_type": avocado_model['model_info']['type'],
+                "features_count": avocado_model['model_info']['features_count'],
+                "description": "Avocado Price Prediction Model"
+            }
+        except Exception as e:
+            services_status["avocado"] = {
+                "status": "unhealthy",
+                "error": str(e)
+            }
+    
     overall_status = "healthy" if all(
         service["status"] == "healthy" 
         for service in services_status.values()
@@ -218,7 +246,9 @@ def health_check():
         "properties_available": PROPERTIES_AVAILABLE,
         "movies_available": MOVIES_AVAILABLE,
         "flights_available": FLIGHTS_AVAILABLE,
-        "acv_available": ACV_AVAILABLE
+        "acv_available": ACV_AVAILABLE,
+        "avocado_available": AVOCADO_AVAILABLE,
+        "avocado_available": AVOCADO_AVAILABLE
     }
 
 @app.get("/models")
@@ -282,6 +312,24 @@ def list_models():
             "status": "active"
         })
     
+    if AVOCADO_AVAILABLE:
+        models.append({
+            "name": "avocado",
+            "description": "Predicción de precios de aguacate usando CatBoost",
+            "endpoint": "/avocado/predict",
+            "type": "CatBoost Regressor",
+            "status": "active"
+        })
+    
+    if AVOCADO_AVAILABLE:
+        models.append({
+            "name": "avocado",
+            "description": "Predicción de precios de aguacate usando CatBoost",
+            "endpoint": "/avocado/predict",
+            "type": "CatBoost Regressor",
+            "status": "active"
+        })
+    
     return {"available_models": models}
 
 if __name__ == "__main__":
@@ -298,6 +346,10 @@ if __name__ == "__main__":
         print("   • Flight Delay Prediction (Random Forest)")
     if ACV_AVAILABLE:
         print("   • ACV Risk Prediction (Decision Tree)")
+    if AVOCADO_AVAILABLE:
+        print("   • Avocado Price Prediction (CatBoost)")
+    if AVOCADO_AVAILABLE:
+        print("   • Avocado Price Prediction (CatBoost)")
     print("Documentación disponible en: http://localhost:8000/docs")
     
     uvicorn.run(

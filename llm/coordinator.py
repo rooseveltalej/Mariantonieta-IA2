@@ -6,7 +6,8 @@ from .extract_params import (
     extract_flights_parameters,
     extract_properties_parameters,
     extract_movies_parameters,
-    extract_acv_parameters
+    extract_acv_parameters,
+    extract_avocado_parameters
 )
 from .available_models import MODELS_CONFIG
 
@@ -101,6 +102,12 @@ def interpretar_y_ejecutar(query: str):
                 if acv_params:
                     data.update(acv_params)
                     print(f"🏥 Parámetros extraídos para ACV: {acv_params}")
+            
+            elif modelo == "avocado":
+                avocado_params = extract_avocado_parameters(query, llm)
+                if avocado_params:
+                    data.update(avocado_params)
+                    print(f"🥑 Parámetros extraídos para Aguacate: {avocado_params}")
             
             response = requests.post(model_config["endpoint"], json=data, timeout=60)
             

@@ -436,3 +436,150 @@ def extract_acv_parameters(query: str, llm: Ollama):
     except Exception as e:
         print(f"Error extrayendo parámetros de ACV: {e}")
         return {}
+
+def extract_avocado_parameters(query: str, llm: Ollama):
+    """
+    Extrae parámetros para el modelo de predicción de precios de aguacate
+    """
+    extraction_prompt = f"""
+    Extrae información específica para predicción de precios de aguacate del siguiente texto:
+    
+    "{query}"
+    
+    Busca y extrae SOLO los valores que se mencionen explícitamente:
+    - Fecha de predicción: Si se menciona un año específico (ej: "2014", "2016"), úsalo con una fecha por defecto del 31 de diciembre
+    - Si se menciona una fecha completa (ej: "2024-12-01"), úsala exactamente
+    - Si se menciona fecha relativa (ej: "mañana", "próxima semana"), calcula desde hoy (2025-10-26)
+    - Región geográfica (ej: "California", "Northeast", "Southeast", "Seattle", "Texas", "Florida")
+    - Tipo de aguacate: "conventional" (convencional) o "organic" (orgánico)
+    - Datos de volumen si se mencionan (total_volume, small_bags, large_bags, etc.)
+    
+    IMPORTANTE: Si se menciona un año específico como "2014" o "2016", la fecha debe ser ese año, NO el año actual.
+    
+    Ejemplos:
+    - "aguacate para 2014" → "date": "2014-12-31"
+    - "precio en Seattle para 2016" → "date": "2016-12-31", "region": "Seattle"
+    - "aguacate orgánico mañana" → "date": "2025-10-27", "type": "organic"
+    
+    Responde SOLO en formato JSON válido:
+    {{
+        "date": "2014-12-31",
+        "region": "Seattle", 
+        "type": "organic",
+        "query": "predicción de precio de aguacate orgánico en Seattle para 2014"
+    }}
+    """
+
+    try:
+        extraction_result = llm.invoke(extraction_prompt)
+        import json
+        import re
+        from datetime import datetime, timedelta
+        
+        # Limpiar y extraer JSON de la respuesta
+        json_match = re.search(r'\{.*\}', extraction_result, re.DOTALL)
+        if json_match:
+            extracted_data = json.loads(json_match.group())
+            extracted_params = {}
+            
+            # Procesar fecha
+            if "date" in extracted_data:
+                date_str = extracted_data["date"]
+                if isinstance(date_str, str):
+                    try:
+                        # Validar formato de fecha
+                        datetime.strptime(date_str, "%Y-%m-%d")
+                        extracted_params["date"] = date_str
+                    except ValueError:
+                        # Si no es válida, usar fecha actual + 1 día
+                        tomorrow = datetime.now() + timedelta(days=1)
+                        extracted_params["date"] = tomorrow.strftime("%Y-%m-%d")
+                else:
+                    # Fecha por defecto: mañana
+                    tomorrow = datetime.now() + timedelta(days=1)
+                    extracted_params["date"] = tomorrow.strftime("%Y-%m-%d")
+            else:
+                # Fecha por defecto: mañana
+                tomorrow = datetime.now() + timedelta(days=1)
+                extracted_params["date"] = tomorrow.strftime("%Y-%m-%d")
+            
+            # Procesar región
+            if "region" in extracted_data:
+                region = extracted_data["region"]
+                if isinstance(region, str) and region.strip():
+                    # Lista de regiones válidas
+                    valid_regions = [
+                        "California", "Northeast", "Southeast", "SouthCentral", "West", "Midsouth",
+                        "Plains", "GreatLakes", "NewYork", "LosAngeles", "Chicago", "PhoenixTucson",
+                        "Houston", "DallasFtWorth", "WashingtonDC", "Boston", "Philadelphia",
+                        "Atlanta", "Miami", "Detroit", "Seattle", "Denver", "Sacramento"
+                    ]
+                    
+                    # Buscar región similar (case insensitive)
+                    region_lower = region.lower()
+                    for valid_region in valid_regions:
+                        if region_lower in valid_region.lower() or valid_region.lower() in region_lower:
+                            extracted_params["region"] = valid_region
+                            break
+                    else:
+                        # Si no encuentra coincidencia, usar California por defecto
+                        extracted_params["region"] = "California"
+                else:
+                    extracted_params["region"] = "California"
+            else:
+                extracted_params["region"] = "California"
+            
+            # Procesar tipo de aguacate
+            if "type" in extracted_data:
+                avocado_type = extracted_data["type"]
+                if isinstance(avocado_type, str):
+                    type_lower = avocado_type.lower()
+                    if "organic" in type_lower or "orgánico" in type_lower:
+                        extracted_params["type"] = "organic"
+                    else:
+                        extracted_params["type"] = "conventional"
+                else:
+                    extracted_params["type"] = "conventional"
+            else:
+                extracted_params["type"] = "conventional"
+            
+            # Procesar volúmenes (opcionales)
+            volume_fields = [
+                "total_volume", "plu_4046", "plu_4225", "plu_4770", 
+                "total_bags", "small_bags", "large_bags", "xlarge_bags"
+            ]
+            
+            for field in volume_fields:
+                if field in extracted_data:
+                    volume_value = extracted_data[field]
+                    if isinstance(volume_value, str):
+                        numbers = re.findall(r'\d+\.?\d*', volume_value)
+                        if numbers:
+                            volume = float(numbers[0])
+                            if volume > 0:  # Volumen debe ser positivo
+                                extracted_params[field] = volume
+                    elif isinstance(volume_value, (int, float)) and volume_value > 0:
+                        extracted_params[field] = float(volume_value)
+            
+            # Agregar query original para referencia
+            if "query" in extracted_data:
+                extracted_params["query"] = extracted_data["query"]
+            
+            return extracted_params
+        else:
+            # Si no puede extraer JSON, devolver parámetros mínimos
+            tomorrow = datetime.now() + timedelta(days=1)
+            return {
+                "date": tomorrow.strftime("%Y-%m-%d"),
+                "region": "California",
+                "type": "conventional"
+            }
+    except Exception as e:
+        print(f"Error extrayendo parámetros de aguacate: {e}")
+        # Devolver parámetros por defecto en caso de error
+        tomorrow = datetime.now() + timedelta(days=1)
+        return {
+            "date": tomorrow.strftime("%Y-%m-%d"),
+            "region": "California",
+            "type": "conventional"
+        }

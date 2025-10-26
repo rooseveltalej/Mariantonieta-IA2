@@ -30,11 +30,11 @@ MODELS_CONFIG = {
         "available": True,
         "response_type": "medical_classification"
     },
-    "wine": {
-        "endpoint": "http://localhost:8000/wine/classify",
-        "description": "Para clasificación de vinos basada en características químicas",
-        "available": False,
-        "response_type": "classification"
+    "avocado": {
+        "endpoint": "http://localhost:8000/avocado/predict",
+        "description": "Para predicción de precios de aguacate basado en región, temporada, tipo y datos de mercado",
+        "available": True,
+        "response_type": "prediction"
     },
     "churn": {
         "endpoint": "http://localhost:8000/churn/predict",
