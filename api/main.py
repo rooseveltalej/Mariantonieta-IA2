@@ -5,6 +5,7 @@ import uvicorn
 import sys
 import os
 from typing import Dict, Any
+from api.models.main_models import QueryRequest, QueryResponse, HealthResponse
 
 # Agregar el directorio padre al path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -13,25 +14,46 @@ from llm.coordinator import interpretar_y_ejecutar
 
 # Importar las APIs de los modelos
 try:
-    from api.routes.bitcoin_api import app as bitcoin_app, load_bitcoin_model
+    from .routes.bitcoin_api import app as bitcoin_app, load_bitcoin_model
     BITCOIN_AVAILABLE = True
 except ImportError as e:
     print(f"⚠️  Bitcoin API no disponible: {e}")
     BITCOIN_AVAILABLE = False
 
 try:
-    from api.routes.properties_api import app as properties_app, load_properties_model
+    from .routes.properties_api import app as properties_app, load_properties_model
     PROPERTIES_AVAILABLE = True
 except ImportError as e:
     print(f"⚠️  Properties API no disponible: {e}")
     PROPERTIES_AVAILABLE = False
 
 try:
-    from api.routes.movies_api import app as movies_app, load_movies_model_and_data
+    from .routes.movies_api import app as movies_app, load_movies_model_and_data
     MOVIES_AVAILABLE = True
 except ImportError as e:
     print(f"⚠️  Movies API no disponible: {e}")
     MOVIES_AVAILABLE = False
+
+try:
+    from .routes.flights_api import app as flights_app, load_flights_model
+    FLIGHTS_AVAILABLE = True
+except ImportError as e:
+    print(f"⚠️  Flights API no disponible: {e}")
+    FLIGHTS_AVAILABLE = False
+
+try:
+    from .routes.acv_api import app as acv_app, load_acv_model
+    ACV_AVAILABLE = True
+except ImportError as e:
+    print(f"⚠️  ACV API no disponible: {e}")
+    ACV_AVAILABLE = False
+
+try:
+    from .routes.avocado_api import app as avocado_app, load_avocado_model
+    AVOCADO_AVAILABLE = True
+except ImportError as e:
+    print(f"⚠️  Avocado API no disponible: {e}")
+    AVOCADO_AVAILABLE = False
 
 app = FastAPI(
     title="AI Models API Hub",
@@ -48,17 +70,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-class QueryRequest(BaseModel):
-    query: str
-
-class QueryResponse(BaseModel):
-    respuesta: str
-
-class HealthResponse(BaseModel):
-    status: str
-    available_models: list
-    message: str
-
 # Montar las sub-aplicaciones de los modelos
 if BITCOIN_AVAILABLE:
     app.mount("/bitcoin", bitcoin_app)
@@ -68,6 +79,15 @@ if PROPERTIES_AVAILABLE:
 
 if MOVIES_AVAILABLE:
     app.mount("/movies", movies_app)
+
+if FLIGHTS_AVAILABLE:
+    app.mount("/flights", flights_app)
+
+if ACV_AVAILABLE:
+    app.mount("/acv", acv_app)
+
+if AVOCADO_AVAILABLE:
+    app.mount("/avocado", avocado_app)
 
 @app.get("/", response_model=HealthResponse)
 def root():
@@ -79,6 +99,12 @@ def root():
         available_models.append("properties")
     if MOVIES_AVAILABLE:
         available_models.append("movies")
+    if FLIGHTS_AVAILABLE:
+        available_models.append("flights")
+    if ACV_AVAILABLE:
+        available_models.append("acv")
+    if AVOCADO_AVAILABLE:
+        available_models.append("avocado")
     
     return HealthResponse(
         status="active",
@@ -161,6 +187,53 @@ def health_check():
                 "error": str(e)
             }
     
+    # Verificar Flights API si está disponible
+    if FLIGHTS_AVAILABLE:
+        try:
+            flights_model = load_flights_model()
+            services_status["flights"] = {
+                "status": "healthy",
+                "model_type": flights_model['model_info']['type'],
+                "description": "Flight Delay Prediction Model"
+            }
+        except Exception as e:
+            services_status["flights"] = {
+                "status": "unhealthy",
+                "error": str(e)
+            }
+    
+    # Verificar ACV API si está disponible
+    if ACV_AVAILABLE:
+        try:
+            acv_model = load_acv_model()
+            services_status["acv"] = {
+                "status": "healthy",
+                "model_type": acv_model['model_info']['type'],
+                "accuracy": acv_model['model_info']['accuracy'],
+                "description": "Stroke Risk Prediction Model"
+            }
+        except Exception as e:
+            services_status["acv"] = {
+                "status": "unhealthy",
+                "error": str(e)
+            }
+    
+    # Verificar Avocado API si está disponible
+    if AVOCADO_AVAILABLE:
+        try:
+            avocado_model = load_avocado_model()
+            services_status["avocado"] = {
+                "status": "healthy",
+                "model_type": avocado_model['model_info']['type'],
+                "features_count": avocado_model['model_info']['features_count'],
+                "description": "Avocado Price Prediction Model"
+            }
+        except Exception as e:
+            services_status["avocado"] = {
+                "status": "unhealthy",
+                "error": str(e)
+            }
+    
     overall_status = "healthy" if all(
         service["status"] == "healthy" 
         for service in services_status.values()
@@ -171,7 +244,11 @@ def health_check():
         "services": services_status,
         "bitcoin_available": BITCOIN_AVAILABLE,
         "properties_available": PROPERTIES_AVAILABLE,
-        "movies_available": MOVIES_AVAILABLE
+        "movies_available": MOVIES_AVAILABLE,
+        "flights_available": FLIGHTS_AVAILABLE,
+        "acv_available": ACV_AVAILABLE,
+        "avocado_available": AVOCADO_AVAILABLE,
+        "avocado_available": AVOCADO_AVAILABLE
     }
 
 @app.get("/models")
@@ -217,6 +294,42 @@ def list_models():
             "status": "active"
         })
     
+    if FLIGHTS_AVAILABLE:
+        models.append({
+            "name": "flights",
+            "description": "Predicción de retrasos de vuelos usando Random Forest",
+            "endpoint": "/flights/predict",
+            "type": "Random Forest",
+            "status": "active"
+        })
+    
+    if ACV_AVAILABLE:
+        models.append({
+            "name": "acv",
+            "description": "Predicción de riesgo de accidente cerebrovascular usando Árbol de Decisión",
+            "endpoint": "/acv/predict",
+            "type": "Decision Tree",
+            "status": "active"
+        })
+    
+    if AVOCADO_AVAILABLE:
+        models.append({
+            "name": "avocado",
+            "description": "Predicción de precios de aguacate usando CatBoost",
+            "endpoint": "/avocado/predict",
+            "type": "CatBoost Regressor",
+            "status": "active"
+        })
+    
+    if AVOCADO_AVAILABLE:
+        models.append({
+            "name": "avocado",
+            "description": "Predicción de precios de aguacate usando CatBoost",
+            "endpoint": "/avocado/predict",
+            "type": "CatBoost Regressor",
+            "status": "active"
+        })
+    
     return {"available_models": models}
 
 if __name__ == "__main__":
@@ -229,6 +342,14 @@ if __name__ == "__main__":
         print("   • Properties Price Prediction (Random Forest)")
     if MOVIES_AVAILABLE:
         print("   • Movies Recommendation System (KNN)")
+    if FLIGHTS_AVAILABLE:
+        print("   • Flight Delay Prediction (Random Forest)")
+    if ACV_AVAILABLE:
+        print("   • ACV Risk Prediction (Decision Tree)")
+    if AVOCADO_AVAILABLE:
+        print("   • Avocado Price Prediction (CatBoost)")
+    if AVOCADO_AVAILABLE:
+        print("   • Avocado Price Prediction (CatBoost)")
     print("Documentación disponible en: http://localhost:8000/docs")
     
     uvicorn.run(

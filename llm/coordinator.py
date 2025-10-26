@@ -1,194 +1,18 @@
 from langchain_community.llms import Ollama
 import requests
 import json
+from .extract_params import (
+    extract_bitcoin_parameters,
+    extract_flights_parameters,
+    extract_properties_parameters,
+    extract_movies_parameters,
+    extract_acv_parameters,
+    extract_avocado_parameters
+)
+from .available_models import MODELS_CONFIG
 
 llm = Ollama(model="llama3")
 
-# Configuración de modelos disponibles
-MODELS_CONFIG = {
-    "bitcoin": {
-        "endpoint": "http://localhost:8000/bitcoin/models/bitcoin/predict",
-        "description": "Para predicciones de precios de Bitcoin, criptomonedas, análisis financiero",
-        "available": True,
-        "response_type": "prediction"
-    },
-    "properties": {
-        "endpoint": "http://localhost:8000/properties/models/properties/predict",
-        "description": "Para predicción de precios de propiedades inmobiliarias, casas, apartamentos",
-        "available": True,
-        "response_type": "prediction"
-    },
-    "movies": {
-        "endpoint": "http://localhost:8000/movies/models/movies/recommend",
-        "description": "Para recomendaciones de películas personalizadas basadas en preferencias",
-        "available": True,
-        "response_type": "recommendation"
-    },
-    # Modelos en desarrollo
-    "wine": {
-        "endpoint": "http://localhost:8000/wine/classify",
-        "description": "Para clasificación de vinos basada en características químicas",
-        "available": False,
-        "response_type": "classification"
-    },
-    "churn": {
-        "endpoint": "http://localhost:8000/churn/predict",
-        "description": "Para predicción de abandono de clientes",
-        "available": False,
-        "response_type": "prediction"
-    },
-    "emotions": {
-        "endpoint": "http://localhost:8000/emotions/analyze",
-        "description": "Para análisis de emociones en texto",
-        "available": False,
-        "response_type": "classification"
-    }
-}
-
-def extract_bitcoin_parameters(query: str):
-    """
-    Extrae parámetros numéricos del texto para el modelo Bitcoin
-    """
-    extraction_prompt = f"""
-    Extrae valores numéricos específicos para predicción de Bitcoin del siguiente texto:
-    
-    "{query}"
-    
-    Busca y extrae SOLO los valores que se mencionen explícitamente:
-    - Precio actual/open (ej: "precio actual 32500", "bitcoin está en 31000")
-    - Precio máximo/high (ej: "máximo 33000", "high 32800")
-    - Precio mínimo/low (ej: "mínimo 31500", "low 31200")
-    - Volumen (ej: "volumen 2B", "2 billones de volumen", "1.5B USD")
-    - Market cap (ej: "market cap 600B", "capitalización 700 billones")
-    - RSI (ej: "RSI 65", "RSI de 72.5")
-    - Medias móviles (ej: "MA5 31800", "media móvil 20 días 31500")
-    
-    Responde SOLO en formato JSON válido con los valores encontrados:
-    {{
-        "open_price": 32500.0,
-        "high_price": null,
-        "volume": 2000000000.0,
-        "rsi_14": 65.0
-    }}
-    
-    Si NO encuentras un valor específico, usa null.
-    NO inventes valores, SOLO extrae los mencionados explícitamente.
-    """
-    
-    try:
-        extraction_result = llm.invoke(extraction_prompt)
-        # Intentar parsear como JSON
-        import json
-        import re
-        
-        # Limpiar la respuesta para extraer solo el JSON
-        json_match = re.search(r'\{.*\}', extraction_result, re.DOTALL)
-        if json_match:
-            json_str = json_match.group()
-            extracted_params = json.loads(json_str)
-            # Filtrar valores null
-            filtered_params = {k: v for k, v in extracted_params.items() if v is not None}
-            return filtered_params
-        else:
-            return {}
-    except Exception as e:
-        print(f"Error extrayendo parámetros: {e}")
-        return {}
-
-def extract_properties_parameters(query: str):
-    """
-    Extrae parámetros para predicción de precios de propiedades
-    """
-    extraction_prompt = f"""
-    Extrae características de propiedades del siguiente texto:
-    
-    "{query}"
-    
-    Busca y extrae SOLO los valores mencionados explícitamente:
-    - Baños (ej: "3 baños", "2.5 bathrooms", "4 bath")
-    - Habitaciones (ej: "4 habitaciones", "3 bedrooms", "5 bed")
-    - Pies cuadrados (ej: "2500 sq ft", "1800 pies cuadrados", "3000 square feet")
-    - Año construcción (ej: "construida en 1990", "built in 2005", "año 2010")
-    - Tamaño del lote (ej: "7000 sq ft lot", "0.5 acres", "5000 pies cuadrados de terreno")
-    - Coordenadas (ej: "latitud 34.05", "longitude -118.25")
-    - Impuestos (ej: "taxes $5000", "impuestos 4500 anuales")
-    
-    Responde SOLO en formato JSON válido:
-    {{
-        "bathroomcnt": 3.0,
-        "bedroomcnt": 4.0,
-        "finishedsquarefeet": 2500.0,
-        "yearbuilt": 1990.0,
-        "lotsizesquarefeet": 7000.0,
-        "latitude": null,
-        "longitude": null,
-        "taxamount": 5000.0
-    }}
-    
-    Si NO encuentras un valor específico, usa null.
-    """
-    
-    try:
-        extraction_result = llm.invoke(extraction_prompt)
-        import json
-        import re
-        
-        json_match = re.search(r'\{.*\}', extraction_result, re.DOTALL)
-        if json_match:
-            json_str = json_match.group()
-            extracted_params = json.loads(json_str)
-            filtered_params = {k: v for k, v in extracted_params.items() if v is not None}
-            return filtered_params
-        else:
-            return {}
-    except Exception as e:
-        print(f"Error extrayendo parámetros de propiedades: {e}")
-        return {}
-
-def extract_movies_parameters(query: str):
-    """
-    Extrae parámetros para recomendaciones de películas
-    """
-    extraction_prompt = f"""
-    Extrae información para recomendaciones de películas del siguiente texto:
-    
-    "{query}"
-    
-    Busca y extrae SOLO los valores mencionados explícitamente:
-    - ID de película (ej: "película ID 5", "movie 10", "film 25")
-    - ID de usuario (ej: "usuario 15", "user 8", "mi ID es 20")
-    - Título de película (ej: "Toy Story", "Jumanji", "Heat")
-    - Género (ej: "acción", "comedia", "drama", "thriller")
-    - Número de recomendaciones (ej: "5 películas", "recomienda 3", "top 10")
-    
-    Responde SOLO en formato JSON válido:
-    {{
-        "movie_id": 5,
-        "user_id": 15,
-        "movie_title": "Toy Story",
-        "genre": "acción",
-        "num_recommendations": 5
-    }}
-    
-    Si NO encuentras un valor específico, usa null.
-    """
-    
-    try:
-        extraction_result = llm.invoke(extraction_prompt)
-        import json
-        import re
-        
-        json_match = re.search(r'\{.*\}', extraction_result, re.DOTALL)
-        if json_match:
-            json_str = json_match.group()
-            extracted_params = json.loads(json_str)
-            filtered_params = {k: v for k, v in extracted_params.items() if v is not None}
-            return filtered_params
-        else:
-            return {}
-    except Exception as e:
-        print(f"Error extrayendo parámetros de películas: {e}")
-        return {}
 
 def get_available_models():
     """Retorna lista de modelos disponibles"""
@@ -221,10 +45,10 @@ def interpretar_y_ejecutar(query: str):
     Consulta: "{query}"
 
     Modelos disponibles:
-{models_description}
+    {models_description}
 
     Modelos en desarrollo:
-{unavailable_models}
+    {unavailable_models}
 
     Responde SOLO con el nombre del modelo más apropiado ({', '.join(MODELS_CONFIG.keys())}).
     Si no hay un modelo apropiado, responde "ninguno".
@@ -246,19 +70,25 @@ def interpretar_y_ejecutar(query: str):
             
             # Extraer parámetros específicos según el modelo
             if modelo == "bitcoin":
-                bitcoin_params = extract_bitcoin_parameters(query)
+                bitcoin_params = extract_bitcoin_parameters(query, llm)
                 if bitcoin_params:
                     data.update(bitcoin_params)
                     print(f"🎯 Parámetros extraídos para Bitcoin: {bitcoin_params}")
             
+            elif modelo == "flights":
+                flights_params = extract_flights_parameters(query, llm)
+                if flights_params:
+                    data.update(flights_params)
+                    print(f"✈️ Parámetros extraídos para Vuelos: {flights_params}")
+            
             elif modelo == "properties":
-                properties_params = extract_properties_parameters(query)
+                properties_params = extract_properties_parameters(query, llm)
                 if properties_params:
                     data.update(properties_params)
                     print(f"🏠 Parámetros extraídos para Propiedades: {properties_params}")
             
             elif modelo == "movies":
-                movies_params = extract_movies_parameters(query)
+                movies_params = extract_movies_parameters(query, llm)
                 if movies_params:
                     data.update(movies_params)
                     print(f"🎬 Parámetros extraídos para Películas: {movies_params}")
@@ -267,7 +97,19 @@ def interpretar_y_ejecutar(query: str):
                 if "user_id" in data and "movie_id" in data:
                     model_config["endpoint"] = "http://localhost:8000/movies/models/movies/predict-rating"
             
-            response = requests.post(model_config["endpoint"], json=data, timeout=30)
+            elif modelo == "acv":
+                acv_params = extract_acv_parameters(query, llm)
+                if acv_params:
+                    data.update(acv_params)
+                    print(f"🏥 Parámetros extraídos para ACV: {acv_params}")
+            
+            elif modelo == "avocado":
+                avocado_params = extract_avocado_parameters(query, llm)
+                if avocado_params:
+                    data.update(avocado_params)
+                    print(f"🥑 Parámetros extraídos para Aguacate: {avocado_params}")
+            
+            response = requests.post(model_config["endpoint"], json=data, timeout=60)
             
             if response.status_code == 200:
                 result = response.json()
@@ -293,10 +135,19 @@ def interpretar_y_ejecutar(query: str):
 
     Tu tarea es interpretar este resultado y explicárselo al usuario de forma natural, clara y útil.
 
-    Instrucciones específicas según el tipo de modelo:
+        Instrucciones específicas según el tipo de modelo:
+    - Si es 'time_series_prediction' (predicción temporal): Explica las tendencias, fechas específicas, valores predichos y intervalos de confianza
+    - Si es 'flight_prediction' (predicción de vuelos): Explica el retraso esperado, factores que influyen, nivel de confianza y recomendaciones
     - Si es 'prediction' (predicción): Incluye el valor predicho, tendencia y nivel de confianza
     - Si es 'classification' (clasificación): Explica la categoría predicha y probabilidad
     - Si es 'recommendation' (recomendación): Lista las recomendaciones principales y razones
+    - Si es 'medical_classification' (clasificación médica): Explica el nivel de riesgo, probabilidad, factores de riesgo identificados y recomendaciones médicas
+
+    Para predicciones de Bitcoin con Prophet:
+    - Menciona las fechas específicas y sus precios predichos
+    - Explica la tendencia general (alcista, bajista, estable)
+    - Incluye los intervalos de confianza si están disponibles
+    - Menciona limitaciones del modelo (predicciones son estimaciones)
 
     Instrucciones generales:
     1. Explica qué significa el resultado en términos simples
@@ -308,6 +159,7 @@ def interpretar_y_ejecutar(query: str):
     """
 
     try:
+        # Siempre usar el LLM para generar una respuesta conversacional completa
         explicacion = llm.invoke(interpretation_prompt)
         return explicacion
     except Exception as e:
@@ -323,9 +175,10 @@ def format_fallback_response(modelo: str, result: dict, response_type: str):
             if modelo == "bitcoin" and "prediction" in result:
                 prediction = result.get("prediction", 0)
                 confidence = result.get("confidence", 0)
-                return f"💰 Predicción de Bitcoin: ${prediction:,.2f} USD (Confianza: {confidence:.1f}%)"
-            
-            elif modelo == "properties" and "prediction" in result:
+                return f"💰 Predicción Bitcoin: ${prediction:,.2f} USD (Confianza: {confidence:.1f}%)"
+                
+        elif response_type == "prediction":
+            if modelo == "properties" and "prediction" in result:
                 prediction = result.get("prediction", 0)
                 confidence = result.get("confidence", 0)
                 return f"🏠 Precio estimado de propiedad: ${prediction:,.2f} USD (Confianza: {confidence:.1f}%)"
@@ -338,6 +191,18 @@ def format_fallback_response(modelo: str, result: dict, response_type: str):
                 predicted_class = result.get("predicted_class", "Desconocido")
                 probability = result.get("probability", 0)
                 return f"🎯 Clasificación: {predicted_class} (Probabilidad: {probability:.1f}%)"
+        
+        elif response_type == "medical_classification":
+            if modelo == "acv":
+                prediction = result.get("prediction", 0)
+                probability = result.get("probability", 0)
+                risk_level = result.get("risk_level", "Desconocido")
+                confidence = result.get("confidence", 0)
+                
+                if prediction == 1:
+                    return f"⚠️ RIESGO ALTO de ACV: {probability:.1%} probabilidad - Nivel: {risk_level} (Confianza: {confidence:.1f}%)"
+                else:
+                    return f"✅ RIESGO BAJO de ACV: {(1-probability):.1%} probabilidad - Nivel: {risk_level} (Confianza: {confidence:.1f}%)"
                 
         elif response_type == "recommendation":
             if modelo == "movies":

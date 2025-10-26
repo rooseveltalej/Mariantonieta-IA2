@@ -9,37 +9,13 @@ import numpy as np
 import os
 import sys
 from typing import Dict, List, Optional
+from ..models.movies_api_models import MovieRecommendationRequest, MovieRecommendationResponse, MovieRatingRequest, MovieRatingResponse
 
-# Agregar el directorio padre al path para importar constants
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from notebooks import constants as const
+# Importar constantes desde el paquete api
+from .. import constants as const
 
 app = FastAPI(title="Movies Recommendation API", version="1.0.0")
 
-class MovieRecommendationRequest(BaseModel):
-    query: str
-    # Parámetros para recomendaciones
-    movie_title: Optional[str] = None
-    movie_id: Optional[int] = None
-    user_id: Optional[int] = None
-    genre: Optional[str] = None
-    num_recommendations: Optional[int] = 5
-
-class MovieRecommendationResponse(BaseModel):
-    recommendations: List[Dict]
-    model_info: Dict
-    interpretation: str
-
-class MovieRatingRequest(BaseModel):
-    query: str
-    user_id: int
-    movie_id: int
-
-class MovieRatingResponse(BaseModel):
-    predicted_rating: float
-    confidence: float
-    model_info: Dict
-    interpretation: str
 
 # Variables globales para el modelo y datos
 _loaded_model_data = None
@@ -55,7 +31,7 @@ def load_movies_model_and_data():
     
     try:
         # Cargar modelo KNN
-        model_path = os.path.join(const.BASE_DIR, 'models', 'knn_movie_recommendation_model.pkl')
+        model_path = os.path.join(const.BASE_DIR, 'ml_models', 'knn_movie_recommendation_model.pkl')
         with open(model_path, 'rb') as f:
             knn_model = pickle.load(f)
         
