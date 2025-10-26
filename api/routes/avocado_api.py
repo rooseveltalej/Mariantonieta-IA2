@@ -9,6 +9,7 @@ import os
 from datetime import datetime, timedelta
 from typing import Dict, List, Any
 import warnings
+import time
 warnings.filterwarnings('ignore')
 
 from ..models.avocado_api_models import (
@@ -19,10 +20,14 @@ from ..models.avocado_api_models import (
     AvocadoMarketAnalysisResponse
 )
 
-# Importar constantes desde el paquete api
+# Importar constantes y logger
 from .. import constants as const
+from ..config_logger import get_api_logger, log_model_loading, log_prediction
 
 app = FastAPI(title="Avocado Price Prediction API", version="1.0.0")
+
+# Configurar logger específico para esta API
+logger = get_api_logger("avocado_api", console_output=True)
 
 # Variable global para el modelo
 _loaded_model_data = None
@@ -35,6 +40,7 @@ def load_avocado_model():
     
     try:
         model_path = os.path.join(const.BASE_DIR, 'ml_models', 'avocado_model.pkl')
+        
         with open(model_path, 'rb') as f:
             modelo = pickle.load(f)
         
@@ -85,11 +91,14 @@ def load_avocado_model():
                 'preprocessing': 'Feature Engineering + Temporal Lags + Rolling Means'
             }
         }
-        print("✅ Modelo de Aguacate cargado exitosamente")
+        
+        log_model_loading(logger, "Avocado CatBoost", model_path, True)
+
+        
         return _loaded_model_data
         
     except Exception as e:
-        print(f"❌ Error cargando modelo de Aguacate: {e}")
+        log_model_loading(logger, "Avocado CatBoost", model_path, False, str(e))
         raise HTTPException(status_code=500, detail=f"Error cargando modelo: {str(e)}")
 
 def create_features_from_avocado_data(request: AvocadoPredictionRequest) -> pd.DataFrame:
@@ -185,6 +194,7 @@ def create_features_from_avocado_data(request: AvocadoPredictionRequest) -> pd.D
         return df
         
     except Exception as e:
+        logger.error(f"Error procesando datos: {str(e)}")
         raise HTTPException(status_code=400, detail=f"Error procesando datos: {str(e)}")
 
 def calculate_confidence_score(prediction: float, features: pd.DataFrame) -> float:
@@ -295,6 +305,9 @@ def predict_avocado_price(request: AvocadoPredictionRequest):
     """
     Predice el precio del aguacate basado en los datos proporcionados
     """
+    start_time = time.time()
+    logger.info(f"Solicitud de predicción recibida para {request.type} en {request.region} para {request.date}")
+    
     try:
         # Cargar modelo
         model_data = load_avocado_model()
@@ -308,6 +321,15 @@ def predict_avocado_price(request: AvocadoPredictionRequest):
         
         # Calcular confianza
         confidence = calculate_confidence_score(prediction, features_df)
+        
+        # Log de la predicción
+        log_prediction(
+            logger, 
+            "Avocado CatBoost", 
+            {"region": request.region, "type": request.type, "date": request.date}, 
+            prediction, 
+            confidence
+        )
         
         # Categorizar precio
         price_category = categorize_price(prediction, request.type)
@@ -323,6 +345,9 @@ def predict_avocado_price(request: AvocadoPredictionRequest):
             interpretation += " Esto podría deberse a alta demanda o baja oferta estacional."
         elif price_category == "bajo":
             interpretation += " Esto sugiere buena disponibilidad o temporada de cosecha."
+        
+        execution_time = time.time() - start_time
+        logger.info(f"Predicción completada exitosamente en {execution_time:.3f}s: ${prediction:.2f}")
         
         return AvocadoPredictionResponse(
             prediction=prediction,
@@ -340,6 +365,8 @@ def predict_avocado_price(request: AvocadoPredictionRequest):
         )
         
     except Exception as e:
+        execution_time = time.time() - start_time
+        logger.error(f"Error en predicción después de {execution_time:.3f}s: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error en predicción: {str(e)}")
 
 @app.get("/regions")

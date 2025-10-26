@@ -7,6 +7,13 @@ import os
 from typing import Dict, Any
 from api.models.main_models import QueryRequest, QueryResponse, HealthResponse
 
+from . import constants as const
+from .config_logger import get_main_logger, configure_fastapi_logging
+
+# Configurar logging
+logger = get_main_logger(console_output=True)
+configure_fastapi_logging()
+
 # Agregar el directorio padre al path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -16,35 +23,41 @@ from llm.coordinator import interpretar_y_ejecutar
 try:
     from .routes.bitcoin_api import app as bitcoin_app, load_bitcoin_model
     BITCOIN_AVAILABLE = True
+    logger.info("Bitcoin API importada exitosamente")
 except ImportError as e:
-    print(f"⚠️  Bitcoin API no disponible: {e}")
+    logger.warning(f"Bitcoin API no disponible: {e}")
     BITCOIN_AVAILABLE = False
+
 try:
     from .routes.movies_api import app as movies_app, load_movies_model_and_data
     MOVIES_AVAILABLE = True
+    logger.info("Movies API importada exitosamente")
 except ImportError as e:
-    print(f"⚠️  Movies API no disponible: {e}")
+    logger.warning(f"Movies API no disponible: {e}")
     MOVIES_AVAILABLE = False
 
 try:
     from .routes.flights_api import app as flights_app, load_flights_model
     FLIGHTS_AVAILABLE = True
+    logger.info("Flights API importada exitosamente")
 except ImportError as e:
-    print(f"⚠️  Flights API no disponible: {e}")
+    logger.warning(f"Flights API no disponible: {e}")
     FLIGHTS_AVAILABLE = False
 
 try:
     from .routes.acv_api import app as acv_app, load_acv_model
     ACV_AVAILABLE = True
+    logger.info("ACV API importada exitosamente")
 except ImportError as e:
-    print(f"⚠️  ACV API no disponible: {e}")
+    logger.warning(f"ACV API no disponible: {e}")
     ACV_AVAILABLE = False
 
 try:
     from .routes.avocado_api import app as avocado_app, load_avocado_model
     AVOCADO_AVAILABLE = True
+    logger.info("Avocado API importada exitosamente")
 except ImportError as e:
-    print(f"⚠️  Avocado API no disponible: {e}")
+    logger.warning(f"Avocado API no disponible: {e}")
     AVOCADO_AVAILABLE = False
 
 app = FastAPI(
@@ -102,16 +115,28 @@ def root():
 @app.post("/ask", response_model=QueryResponse)
 def ask_user(request: QueryRequest):
     """Endpoint original del coordinador LLM"""
+    import time
+    start_time = time.time()
+    
     try:
         query = request.query
+        logger.info(f"Consulta recibida: {query}")
+        
         respuesta = interpretar_y_ejecutar(query)
+        
+        execution_time = time.time() - start_time
+        logger.info(f"Consulta procesada exitosamente en {execution_time:.3f}s")
+        
         return QueryResponse(respuesta=respuesta)
     except Exception as e:
+        execution_time = time.time() - start_time
+        logger.error(f"Error procesando consulta en {execution_time:.3f}s: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error en coordinador: {str(e)}")
 
 @app.get("/health")
 def health_check():
     """Verifica el estado de todos los servicios"""
+    logger.info("Iniciando health check de todos los servicios")
     services_status = {}
     
     # Verificar coordinador LLM
@@ -122,11 +147,13 @@ def health_check():
             "status": "healthy",
             "description": "LLM Coordinator activo"
         }
+        logger.info("Coordinador LLM: healthy")
     except Exception as e:
         services_status["coordinator"] = {
             "status": "unhealthy",
             "error": str(e)
         }
+        logger.error(f"Coordinador LLM: unhealthy - {str(e)}")
     
     # Verificar Bitcoin API si está disponible
     if BITCOIN_AVAILABLE:
@@ -137,11 +164,13 @@ def health_check():
                 "model_r2": bitcoin_model['training_info']['r2_score'],
                 "description": "Bitcoin Price Prediction Model"
             }
+            logger.info("Bitcoin API: healthy")
         except Exception as e:
             services_status["bitcoin"] = {
                 "status": "unhealthy",
                 "error": str(e)
             }
+            logger.error(f"Bitcoin API: unhealthy - {str(e)}")
     
     
     # Verificar Movies API si está disponible
@@ -154,11 +183,13 @@ def health_check():
                 "movies_count": len(movies_df),
                 "description": "Movies Recommendation System"
             }
+            logger.info("Movies API: healthy")
         except Exception as e:
             services_status["movies"] = {
                 "status": "unhealthy",
                 "error": str(e)
             }
+            logger.error(f"Movies API: unhealthy - {str(e)}")
     
     # Verificar Flights API si está disponible
     if FLIGHTS_AVAILABLE:
@@ -169,11 +200,13 @@ def health_check():
                 "model_type": flights_model['model_info']['type'],
                 "description": "Flight Delay Prediction Model"
             }
+            logger.info("Flights API: healthy")
         except Exception as e:
             services_status["flights"] = {
                 "status": "unhealthy",
                 "error": str(e)
             }
+            logger.error(f"Flights API: unhealthy - {str(e)}")
     
     # Verificar ACV API si está disponible
     if ACV_AVAILABLE:
@@ -185,11 +218,13 @@ def health_check():
                 "accuracy": acv_model['model_info']['accuracy'],
                 "description": "Stroke Risk Prediction Model"
             }
+            logger.info("ACV API: healthy")
         except Exception as e:
             services_status["acv"] = {
                 "status": "unhealthy",
                 "error": str(e)
             }
+            logger.error(f"ACV API: unhealthy - {str(e)}")
     
     # Verificar Avocado API si está disponible
     if AVOCADO_AVAILABLE:
@@ -201,16 +236,20 @@ def health_check():
                 "features_count": avocado_model['model_info']['features_count'],
                 "description": "Avocado Price Prediction Model"
             }
+            logger.info("Avocado API: healthy")
         except Exception as e:
             services_status["avocado"] = {
                 "status": "unhealthy",
                 "error": str(e)
             }
+            logger.error(f"Avocado API: unhealthy - {str(e)}")
     
     overall_status = "healthy" if all(
         service["status"] == "healthy" 
         for service in services_status.values()
     ) else "partial"
+    
+    logger.info(f"Health check completado - Estado general: {overall_status}")
     
     return {
         "overall_status": overall_status,
@@ -296,23 +335,21 @@ def list_models():
     return {"available_models": models}
 
 if __name__ == "__main__":
-    print("Iniciando AI Models API Hub...")
-    print("Modelos disponibles:")
-    print("   • LLM Coordinator")
+    logger.info("Iniciando AI Models API Hub...")
+    logger.info("Modelos disponibles:")
+    logger.info("   • LLM Coordinator")
     if BITCOIN_AVAILABLE:
-        print("   • Bitcoin Price Prediction (Random Forest)")
+        logger.info("Bitcoin Price Prediction (Random Forest)")
     if MOVIES_AVAILABLE:
-        print("   • Movies Recommendation System (KNN)")
+        logger.info("Movies Recommendation System (KNN)")
     if FLIGHTS_AVAILABLE:
-        print("   • Flight Delay Prediction (Random Forest)")
+        logger.info("Flight Delay Prediction (Random Forest)")
     if ACV_AVAILABLE:
-        print("   • ACV Risk Prediction (Decision Tree)")
+        logger.info("ACV Risk Prediction (Decision Tree)")
     if AVOCADO_AVAILABLE:
-        print("   • Avocado Price Prediction (CatBoost)")
-    if AVOCADO_AVAILABLE:
-        print("   • Avocado Price Prediction (CatBoost)")
-    print("Documentación disponible en: http://localhost:8000/docs")
-    
+        logger.info("Avocado Price Prediction (CatBoost)")
+    logger.info("Documentación disponible en: http://localhost:8000/docs")
+
     uvicorn.run(
         "main:app",
         host="0.0.0.0",

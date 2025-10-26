@@ -11,10 +11,16 @@ import sys
 from typing import Dict, List, Optional
 from ..models.movies_api_models import MovieRecommendationRequest, MovieRecommendationResponse, MovieRatingRequest, MovieRatingResponse
 
+# Logging utilities
+from ..config_logger import get_api_logger, log_model_loading, log_prediction
+
 # Importar constantes desde el paquete api
 from .. import constants as const
 
 app = FastAPI(title="Movies Recommendation API", version="1.0.0")
+
+# Logger for this module
+logger = get_api_logger("movies_api")
 
 
 # Variables globales para el modelo y datos
@@ -81,9 +87,21 @@ def load_movies_model_and_data():
             }
         }
         
+        # Log model load success
+        try:
+            log_model_loading(logger, model_path, True, details={"model_info": _loaded_model_data['model_info']})
+        except Exception:
+            logger.debug("log_model_loading falló al registrar carga exitosa del modelo")
+
         return _loaded_model_data, _movies_data, _ratings_data
         
     except Exception as e:
+        # Log failure
+        try:
+            log_model_loading(logger, model_path if 'model_path' in locals() else 'unknown', False, details={"error": str(e)})
+        except Exception:
+            logger.debug("log_model_loading falló al registrar error de carga de modelo")
+
         raise HTTPException(status_code=500, detail=f"Error cargando modelo: {str(e)}")
 
 def get_movie_recommendations_by_similarity(movie_id, num_recommendations=5):
@@ -216,6 +234,7 @@ def recommend_movies(request: MovieRecommendationRequest):
     Recomienda películas basadas en similitud o preferencias del usuario
     """
     try:
+        logger.info(f"Recomendación solicitada: user_id={request.user_id} movie_id={request.movie_id} num_recs={request.num_recommendations}")
         num_recs = request.num_recommendations or 5
         recommendations = []
         
@@ -279,6 +298,12 @@ def recommend_movies(request: MovieRecommendationRequest):
         
         model_data, _, _ = load_movies_model_and_data()
         
+        # Log prediction / recommendation
+        try:
+            log_prediction(logger, endpoint="/models/movies/recommend", input_payload=request.dict(), output_summary={"recommendations_count": len(recommendations)})
+        except Exception:
+            logger.debug("log_prediction falló al registrar la recomendación")
+
         return MovieRecommendationResponse(
             recommendations=recommendations,
             model_info={
@@ -291,6 +316,7 @@ def recommend_movies(request: MovieRecommendationRequest):
         )
         
     except Exception as e:
+        logger.error(f"Error en recommend_movies: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
 
 @app.post("/models/movies/predict-rating", response_model=MovieRatingResponse)
@@ -299,6 +325,7 @@ def predict_movie_rating(request: MovieRatingRequest):
     Predice el rating que un usuario daría a una película específica
     """
     try:
+        logger.info(f"Predict rating solicitado: user_id={request.user_id} movie_id={request.movie_id}")
         prediction, confidence = predict_user_rating(request.user_id, request.movie_id)
         
         # Obtener información de la película
@@ -339,6 +366,12 @@ def predict_movie_rating(request: MovieRatingRequest):
             f"Confianza: {confidence:.1f}%"
         )
         
+        # Log prediction
+        try:
+            log_prediction(logger, endpoint="/models/movies/predict-rating", input_payload=request.dict(), output_summary={"predicted_rating": round(prediction,2), "confidence": round(confidence,1)})
+        except Exception:
+            logger.debug("log_prediction falló al registrar la predicción de rating")
+
         return MovieRatingResponse(
             predicted_rating=round(prediction, 2),
             confidence=round(confidence, 1),
@@ -352,12 +385,15 @@ def predict_movie_rating(request: MovieRatingRequest):
         )
         
     except Exception as e:
+        logger.error(f"Error en predict_movie_rating: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
 
 @app.get("/health")
 def health():
+    logger.info("Health check solicitado para Movies API")
     try:
         model_data, movies_df, ratings_df = load_movies_model_and_data()
+        logger.info("Health check Movies: modelo cargado exitosamente")
         return {
             "status": "healthy",
             "model_loaded": True,
@@ -366,7 +402,9 @@ def health():
             "ratings_count": len(ratings_df)
         }
     except Exception as e:
-        return {"status": "error", "error": str(e)}
+        error_msg = f"Error en health check de Movies: {str(e)}"
+        logger.error(error_msg)
+        return {"status": "unhealthy", "error": error_msg, "model_loaded": False}
 
 if __name__ == "__main__":
     import uvicorn

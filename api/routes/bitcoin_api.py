@@ -16,9 +16,29 @@ from ..models.bitcoin_api_models import PredictionRequest, PredictionResponse
 # Importar constantes desde el paquete api
 from .. import constants as const
 
+# Importar sistema de logging
+import logging
+from logging.handlers import RotatingFileHandler
+
 app = FastAPI(title="Bitcoin Real Data Prediction API", version="1.0.0")
 
+LOG_DIR = os.path.join(const.BASE_DIR, "logs")
+os.makedirs(LOG_DIR, exist_ok=True)
 
+LOG_FILE = os.path.join(LOG_DIR, "bitcoin_api.log")
+
+
+# Configurar logger con rotación de archivos (5 MB máx, 5 backups)
+handler = RotatingFileHandler(LOG_FILE, maxBytes=5_000_000, backupCount=5, encoding="utf-8")
+formatter = logging.Formatter(
+    "%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S"
+)
+handler.setFormatter(formatter)
+
+logger = logging.getLogger("bitcoin_api_logger")
+logger.setLevel(logging.INFO)
+logger.addHandler(handler)
 
 # Variable global para el modelo
 _loaded_model_data = None
@@ -93,5 +113,5 @@ def health():
 
 if __name__ == "__main__":
     import uvicorn
-    print("🚀 Bitcoin REAL Data API - NO SAMPLES, ONLY REAL DATA")
+    logger.info("Iniciando Bitcoin REAL Data Prediction API...")
     uvicorn.run(app, host="0.0.0.0", port=8000)
