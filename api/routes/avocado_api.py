@@ -27,7 +27,7 @@ from ..config_logger import get_api_logger, log_model_loading, log_prediction
 app = FastAPI(title="Avocado Price Prediction API", version="1.0.0")
 
 # Configurar logger específico para esta API
-logger = get_api_logger("avocado_api", console_output=True)
+logger = get_api_logger("avocado_api", console_output=False)
 
 # Variable global para el modelo
 _loaded_model_data = None

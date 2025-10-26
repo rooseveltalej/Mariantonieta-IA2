@@ -8,11 +8,12 @@ from typing import Dict, Any
 from api.models.main_models import QueryRequest, QueryResponse, HealthResponse
 
 from . import constants as const
-from .config_logger import get_main_logger, configure_fastapi_logging
+from .config_logger import get_main_logger, configure_fastapi_logging, disable_console_logging
 
-# Configurar logging
-logger = get_main_logger(console_output=True)
+# Configurar logging - SOLO A ARCHIVOS, NO CONSOLA
+logger = get_main_logger(console_output=False)
 configure_fastapi_logging()
+disable_console_logging()
 
 # Agregar el directorio padre al path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

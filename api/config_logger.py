@@ -160,54 +160,111 @@ def log_api_response(logger: logging.Logger, endpoint: str, response_status: str
     logger.info(f"API Response - Endpoint: {endpoint} | Status: {response_status} | Time: {execution_time:.3f}s")
 
 
-def log_model_loading(logger: logging.Logger, model_name: str, model_path: str, success: bool, error_msg: str = None):
+def log_model_loading(logger: logging.Logger, model_name_or_path: str, success_or_path: any = None, success: bool = None, error_msg: str = None, details: dict = None):
     """
-    Log estandarizado para carga de modelos
+    Log estandarizado para carga de modelos (compatible con múltiples formatos de llamada)
     
     Args:
         logger: Logger a usar
-        model_name: Nombre del modelo
-        model_path: Path del modelo
-        success: Si la carga fue exitosa
+        model_name_or_path: Nombre del modelo o path (primer parámetro)
+        success_or_path: Success bool o path (segundo parámetro, dependiendo del formato)
+        success: Success bool (para formato de 4 parámetros)
         error_msg: Mensaje de error si falló
+        details: Detalles adicionales (opcional)
     """
-    if success:
-        logger.info(f"Model Loaded - Name: {model_name} | Path: {model_path}")
+    # Determinar formato de llamada
+    if success is not None:
+        # Formato: (logger, model_name, model_path, success, error_msg)
+        model_name = model_name_or_path
+        model_path = success_or_path
+        is_success = success
     else:
-        logger.error(f"Model Load Failed - Name: {model_name} | Path: {model_path} | Error: {error_msg}")
+        # Formato: (logger, model_path, success, details)
+        model_name = "Model"
+        model_path = model_name_or_path
+        is_success = success_or_path
+    
+    if is_success:
+        details_str = f" | Details: {details}" if details else ""
+        logger.info(f"Model Loaded - Name: {model_name} | Path: {model_path}{details_str}")
+    else:
+        error_str = error_msg or (details.get('error', 'Unknown error') if details else 'Unknown error')
+        logger.error(f"Model Load Failed - Name: {model_name} | Path: {model_path} | Error: {error_str}")
 
 
-def log_prediction(logger: logging.Logger, model_name: str, input_data: dict, prediction: any, confidence: float = None):
+def log_prediction(logger: logging.Logger, model_name_or_endpoint: str = None, input_data: dict = None, prediction: any = None, confidence: float = None, endpoint: str = None, input_payload: dict = None, output_summary: dict = None, **kwargs):
     """
-    Log estandarizado para predicciones
+    Log estandarizado para predicciones (compatible con múltiples formatos de llamada)
     
     Args:
         logger: Logger a usar
-        model_name: Nombre del modelo
-        input_data: Datos de entrada
-        prediction: Predicción realizada
+        model_name_or_endpoint: Nombre del modelo o endpoint
+        input_data: Datos de entrada (formato original)
+        prediction: Predicción realizada (formato original)
         confidence: Nivel de confianza (opcional)
+        endpoint: Endpoint llamado (formato nuevo)
+        input_payload: Payload de entrada (formato nuevo)
+        output_summary: Resumen de salida (formato nuevo)
     """
-    confidence_str = f" | Confidence: {confidence:.3f}" if confidence is not None else ""
-    logger.info(f"Prediction - Model: {model_name} | Input: {input_data} | Result: {prediction}{confidence_str}")
+    # Determinar formato de llamada
+    if endpoint is not None:
+        # Formato nuevo: endpoint, input_payload, output_summary
+        log_endpoint = endpoint
+        log_input = input_payload or {}
+        log_output = output_summary or {}
+        logger.info(f"Prediction - Endpoint: {log_endpoint} | Input: {log_input} | Output: {log_output}")
+    else:
+        # Formato original: model_name, input_data, prediction, confidence
+        model_name = model_name_or_endpoint or "Unknown"
+        confidence_str = f" | Confidence: {confidence:.3f}" if confidence is not None else ""
+        logger.info(f"Prediction - Model: {model_name} | Input: {input_data} | Result: {prediction}{confidence_str}")
 
 
 # Configuración global de logging para FastAPI
 def configure_fastapi_logging():
     """
-    Configura el logging de FastAPI para que use nuestro sistema
+    Configura el logging de FastAPI para que use nuestro sistema y NO imprima en consola
     """
     # Configurar uvicorn logger
     uvicorn_logger = logging.getLogger("uvicorn")
     uvicorn_access_logger = logging.getLogger("uvicorn.access")
+    fastapi_logger = logging.getLogger("fastapi")
     
-    # Usar nuestro formato
-    for logger in [uvicorn_logger, uvicorn_access_logger]:
-        if logger.handlers:
-            for handler in logger.handlers:
-                if hasattr(handler, 'setFormatter'):
-                    formatter = logging.Formatter(
-                        "%(asctime)s - %(levelname)s - %(name)s - %(message)s",
-                        datefmt="%Y-%m-%d %H:%M:%S"
-                    )
-                    handler.setFormatter(formatter)
+    # Desactivar console output para todos los loggers de sistema
+    for logger in [uvicorn_logger, uvicorn_access_logger, fastapi_logger]:
+        # Limpiar handlers existentes
+        logger.handlers.clear()
+        
+        # Crear nuestro file handler si no existe
+        log_dir = os.path.join(const.BASE_DIR, "logs")
+        os.makedirs(log_dir, exist_ok=True)
+        
+        log_file = os.path.join(log_dir, f"{logger.name.replace('.', '_')}.log")
+        file_handler = RotatingFileHandler(
+            log_file, 
+            maxBytes=5_000_000, 
+            backupCount=3, 
+            encoding="utf-8"
+        )
+        
+        formatter = logging.Formatter(
+            "%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S"
+        )
+        file_handler.setFormatter(formatter)
+        
+        logger.addHandler(file_handler)
+        logger.setLevel(logging.INFO)
+        logger.propagate = False  # Evitar que se propague a root logger
+
+
+def disable_console_logging():
+    """
+    Desactiva completamente el logging a consola para todos los loggers
+    """
+    # Configurar root logger para no usar consola
+    root_logger = logging.getLogger()
+    root_logger.handlers = [h for h in root_logger.handlers if not isinstance(h, logging.StreamHandler)]
+    
+    # Configurar loggers específicos
+    configure_fastapi_logging()

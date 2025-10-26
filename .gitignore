@@ -26,3 +26,5 @@ ml_models/flight_delay_v1_2025-10-25.pkl
 
 # Archivos de modelos grandes en general (opcional - descomenta si quieres excluir todos los modelos grandes)
 # models/*.pkl
+
+logs/*.log
