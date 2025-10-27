@@ -6,12 +6,17 @@ import pickle
 import pandas as pd
 import numpy as np
 import os
+import time
 from ..models.acv_api_models import ACVPredictionRequest, ACVPredictionResponse
 
-# Importar constantes desde el paquete api
+# Importar constantes y logger
 from .. import constants as const
+from ..config_logger import get_api_logger, log_model_loading, log_prediction
 
 app = FastAPI(title="ACV Prediction API", version="1.0.0")
+
+# Configurar logger específico para esta API
+logger = get_api_logger("acv_api", console_output=False)
 
 # Variable global para el modelo
 _loaded_model_data = None
@@ -24,6 +29,8 @@ def load_acv_model():
     
     try:
         model_path = os.path.join(const.BASE_DIR, 'ml_models', 'ACV_decision_tree_model.pkl')
+        logger.info(f"Iniciando carga del modelo de ACV desde: {model_path}")
+        
         with open(model_path, 'rb') as f:
             modelo = pickle.load(f)
         
@@ -44,12 +51,15 @@ def load_acv_model():
                 'accuracy': 1.0  # Según el notebook
             }
         }
-        print("✅ Modelo de ACV cargado exitosamente")
+        
+        log_model_loading(logger, "ACV Decision Tree", model_path, True)
+        logger.info(f"Modelo ACV cargado con {len(expected_features)} características esperadas")
+        
         return _loaded_model_data
         
     except Exception as e:
-        print(f"❌ Error cargando modelo de ACV: {e}")
-        raise HTTPException(status_code=500, detail=f"Error cargando modelo: {str(e)}")
+        log_model_loading(logger, "ACV Decision Tree", model_path, False, str(e))
+        raise HTTPException(status_code=500, detail=f"Error cargando modelo de ACV: {str(e)}")
 
 def create_features_from_acv_data(request: ACVPredictionRequest):
     """
@@ -129,6 +139,9 @@ def root():
 @app.post("/predict", response_model=ACVPredictionResponse)
 def predict_acv_risk(request: ACVPredictionRequest):
     """Predice el riesgo de ACV usando el modelo de Árbol de Decisión entrenado"""
+    start_time = time.time()
+    logger.info(f"Solicitud de predicción ACV recibida para paciente de {request.age} años, género {request.gender}")
+    
     try:
         # Cargar modelo
         model_data = load_acv_model()
@@ -143,8 +156,8 @@ def predict_acv_risk(request: ACVPredictionRequest):
         features_dict['stroke'] = 0  # Valor dummy, no afecta la predicción
         input_df = pd.DataFrame([features_dict])[expected_features]
         
-        print(f"📊 Input DataFrame shape: {input_df.shape}")
-        print(f"📊 Input features: {input_df.iloc[0].to_dict()}")
+        logger.info(f"Input DataFrame preparado con shape: {input_df.shape}")
+        logger.debug(f"Características de entrada: {input_df.iloc[0].to_dict()}")
         
         # Hacer predicción
         prediction = modelo.predict(input_df)[0]
@@ -159,16 +172,28 @@ def predict_acv_risk(request: ACVPredictionRequest):
         # Calcular confianza (basada en la certeza de la predicción)
         confidence = max(probabilities) * 100
         
+        # Log de la predicción
+        log_prediction(
+            logger,
+            "ACV Decision Tree",
+            {"age": request.age, "gender": request.gender, "hypertension": request.hypertension},
+            f"Riesgo: {'Alto' if prediction == 1 else 'Bajo'} (prob: {acv_probability:.3f})",
+            confidence
+        )
+        
         # Generar recomendaciones
         recommendations = get_recommendations(prediction, acv_probability, features_dict)
         
         # Mensaje explicativo
         if prediction == 1:
             message = f"⚠️ ALTO RIESGO: El modelo predice riesgo elevado de ACV con {acv_probability:.1%} de probabilidad"
+            logger.warning(f"ALTO RIESGO de ACV detectado: probabilidad {acv_probability:.1%}")
         else:
             message = f"✅ BAJO RIESGO: El modelo predice bajo riesgo de ACV con {(1-acv_probability):.1%} de probabilidad"
+            logger.info(f"Bajo riesgo de ACV: probabilidad {acv_probability:.1%}")
         
-        print(f"✅ Predicción exitosa: {prediction} (probabilidad: {acv_probability:.3f})")
+        execution_time = time.time() - start_time
+        logger.info(f"Predicción ACV completada exitosamente en {execution_time:.3f}s")
         
         return ACVPredictionResponse(
             prediction=int(prediction),
@@ -183,15 +208,17 @@ def predict_acv_risk(request: ACVPredictionRequest):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Error en predicción de ACV: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        execution_time = time.time() - start_time
+        logger.error(f"Error en predicción ACV después de {execution_time:.3f}s: {str(e)}")
+        logger.error(f"Traceback completo: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error en predicción: {str(e)}")
 
 @app.get("/health")
 def health():
+    logger.info("Health check solicitado para ACV API")
     try:
         model_data = load_acv_model()
+        logger.info("Health check ACV: modelo cargado exitosamente")
         return {
             "status": "healthy",
             "model_loaded": True,
@@ -201,4 +228,10 @@ def health():
             "accuracy": model_data['model_info']['accuracy']
         }
     except Exception as e:
+        logger.error(f"Health check ACV falló: {str(e)}")
         return {"status": "error", "error": str(e)}
+
+# Cargar modelo al inicio de la aplicación
+logger.info("Iniciando ACV API - cargando modelo...")
+load_acv_model()
+logger.info("ACV API inicializada exitosamente")

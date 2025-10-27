@@ -8,16 +8,19 @@ import pandas as pd
 import numpy as np
 import os
 import sys
+import time
 from typing import Dict, Optional
 from datetime import datetime
 from ..models.flights_api_models import FlightPredictionRequest, FlightPredictionResponse
 
-# Importar constantes desde el paquete api
+# Importar constantes y logger
 from .. import constants as const
+from ..config_logger import get_api_logger, log_model_loading, log_prediction
 
 app = FastAPI(title="Flight Delay Prediction API", version="1.0.0")
 
-
+# Configurar logger específico para esta API
+logger = get_api_logger("flights_api", console_output=False)
 
 # Variable global para el modelo
 _loaded_model_data = None
@@ -33,7 +36,7 @@ def load_flights_model():
     
     try:
         model_path = os.path.join(const.ML_MODELS_PATH, "flight_delay_v1_2025-10-25.pkl")
-        print(f"Cargando modelo de vuelos desde: {model_path}")
+        logger.info(f"Iniciando carga del modelo de vuelos desde: {model_path}")
         
         if not os.path.exists(model_path):
             raise FileNotFoundError(f"Modelo no encontrado en: {model_path}")
@@ -41,11 +44,13 @@ def load_flights_model():
         # Cargar el modelo real usando joblib
         _loaded_model_data = joblib.load(model_path)
         
-        print("Modelo de vuelos cargado exitosamente")
+        log_model_loading(logger, "Flight Delay Model", model_path, True)
+        logger.info(f"Modelo de vuelos cargado exitosamente con tipo: {type(_loaded_model_data)}")
+        
         return _loaded_model_data
         
     except Exception as e:
-        print(f"Error cargando modelo de vuelos: {e}")
+        log_model_loading(logger, "Flight Delay Model", model_path, False, str(e))
         raise HTTPException(status_code=500, detail=f"Error cargando modelo: {str(e)}")
 
 def transform_user_data_to_model_format(flight_data):
@@ -55,7 +60,7 @@ def transform_user_data_to_model_format(flight_data):
     from datetime import datetime
     
     try:
-        print(f"Datos recibidos: {flight_data}")
+        logger.debug(f"Datos recibidos para transformación: {flight_data}")
         
         # Procesar fecha con validación de None
         date_str = flight_data.get('date')
@@ -217,6 +222,9 @@ def predict_flight_delay(request: FlightPredictionRequest):
     """
     Predice el retraso de un vuelo basado en sus características
     """
+    start_time = time.time()
+    logger.info(f"Solicitud de predicción de vuelo recibida: {request.airline} desde {request.origin} a {request.destination}")
+    
     try:
         # Validar y corregir fecha si es necesaria
         validated_date = request.date
@@ -227,9 +235,11 @@ def predict_flight_delay(request: FlightPredictionRequest):
                 # Si la fecha es muy antigua, usar fecha actual
                 if parsed_date.year < 2020:
                     validated_date = datetime.now().strftime("%Y-%m-%d")
+                    logger.info(f"Fecha ajustada de {request.date} a {validated_date}")
             except ValueError:
                 # Si la fecha no es válida, usar fecha actual
                 validated_date = datetime.now().strftime("%Y-%m-%d")
+                logger.warning(f"Fecha inválida {request.date}, usando {validated_date}")
         else:
             # Si no hay fecha, usar fecha actual
             validated_date = datetime.now().strftime("%Y-%m-%d")
@@ -245,9 +255,20 @@ def predict_flight_delay(request: FlightPredictionRequest):
             'delay_at_departure': request.delay_at_departure
         }
         
+        logger.info(f"Datos de vuelo preparados: {flight_data}")
+        
         # Cargar modelo ML y hacer predicción
         model_data = load_flights_model()
         predicted_delay, confidence = make_flight_prediction(model_data, flight_data)
+        
+        # Log de la predicción
+        log_prediction(
+            logger,
+            "Flight Delay Model",
+            {"origin": request.origin, "destination": request.destination, "airline": request.airline},
+            f"Retraso predicho: {predicted_delay:.1f} min",
+            confidence
+        )
         
         # Información del vuelo para la respuesta
         flight_info = {
@@ -283,6 +304,9 @@ def predict_flight_delay(request: FlightPredictionRequest):
                         f"{predicted_delay:.0f} minutos de retraso ({delay_category}). " \
                         f"Confianza: {confidence:.1f}%"
         
+        execution_time = time.time() - start_time
+        logger.info(f"Predicción de vuelo completada exitosamente en {execution_time:.3f}s: {predicted_delay:.1f} min ({delay_category})")
+        
         return FlightPredictionResponse(
             query=request.query,
             prediction=predicted_delay,
@@ -293,12 +317,16 @@ def predict_flight_delay(request: FlightPredictionRequest):
         )
         
     except Exception as e:
+        execution_time = time.time() - start_time
+        logger.error(f"Error en predicción de vuelo después de {execution_time:.3f}s: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error en predicción de vuelos: {str(e)}")
 
 @app.get("/health")
 def health():
+    logger.info("Health check solicitado para Flights API")
     try:
         model = load_flights_model()
+        logger.info("Health check Flights: modelo cargado exitosamente")
         
         return {
             "status": "healthy",
@@ -310,7 +338,13 @@ def health():
             "supported_airports": ["SFO", "JFK", "LAX", "ORD", "DFW", "DEN", "ATL", "SEA", "LAS", "PHX"]
         }
     except Exception as e:
-        return {"status": "error", "error": str(e), "model_available": False}
+        error_msg = f"Error en health check de Flights: {str(e)}"
+        logger.error(error_msg)
+        return {
+            "status": "unhealthy",
+            "model_available": False,
+            "error": error_msg
+        }
 
 if __name__ == "__main__":
     import uvicorn

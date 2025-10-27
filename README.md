@@ -1,86 +1,135 @@
 # 🧠 Primer Proyecto de Inteligencia Artificial — ITCR (Sede San Carlos)
 
-Un sistema distribuido compuesto por microservicios de Machine Learning y un coordinador LLM local. El objetivo es combinar modelos predictivos tradicionales con capacidades conversacionales para que los usuarios exploren y consulten resultados mediante lenguaje natural.
+Un sistema distribuido de microservicios que integra modelos de Machine Learning con capacidades conversacionales mediante un coordinador LLM local. La arquitectura permite consultar y explorar resultados predictivos usando lenguaje natural.
 
-## Destacado
-- Arquitectura basada en microservicios (API REST para modelos)
-- Coordinador inteligente que integra un LLM local (Ollama / LLaMA) para diálogo y explicación
-- Modelos especializados para regresión, clasificación, recomendación y **series de tiempo**
-- Nuevo modelo Prophet para predicciones temporales de Bitcoin
-- Interfaz conversacional para consultas en lenguaje natural
+## Características Técnicas
 
-## Modelos incluidos
+- **Arquitectura de Microservicios**: APIs REST independientes para cada modelo ML
+- **Coordinador LLM Inteligente**: Integración con Ollama/LLaMA para procesamiento de lenguaje natural
+- **Sistema de Logging Centralizado**: Monitoreo y debugging profesional con rotación automática
+- **Extracción Inteligente de Parámetros**: Parsing automático de consultas en lenguaje natural
+- **Interfaz Conversacional**: Comunicación natural entre usuario y modelos predictivos
+- **Manejo Robusto de Errores**: Fallbacks automáticos y validación de entrada
 
-| Modelo                           | Tipo                    | Propósito                                         | Estado    |
-|:--------------------------------:|:-----------------------:|:--------------------------------------------------|:----------|
-| `prophet_bitcoin_v2_*.pkl`      | **Series de Tiempo**   | **Predicción temporal del precio del Bitcoin**   | ✅ Activo |
-| `knn_movie_recommendation_model.pkl` | Recomendación      | Sugerencia de películas según preferencias       | ✅ Activo |
-| `random_forest_properties_*.pkl` | Regresión             | Predicción del precio de propiedades             | ✅ Activo |
-| `ACV_decision_tree_model.pkl`    | Clasificación          | Detección de riesgo de accidente cerebrovascular | ✅ Activo |
-| `bitcoin_random_forest_*.pkl`    | Regresión              | Predicción Bitcoin (modelo anterior)             | 📦 Legacy |
+## Modelos de Machine Learning
 
-> **Nuevo**: El modelo de Bitcoin ahora usa **Prophet** para análisis de series temporales, permitiendo predicciones más precisas con tendencias estacionales y intervalos de confianza.
+| Modelo                              | Algoritmo               | Dominio de Aplicación                            | Estado    |
+|:-----------------------------------:|:-----------------------:|:--------------------------------------------------|:----------|
+| `prophet_bitcoin_v2_*.pkl`         | Prophet (Facebook)      | Predicción temporal de criptomonedas            | ✅ Activo |
+| `catboost_avocado_*.pkl`            | CatBoost               | Predicción de precios de commodities agrícolas   | ✅ Activo |
+| `knn_movie_recommendation_*.pkl`    | K-Nearest Neighbors    | Sistema de recomendación por similitud          | ✅ Activo |
+| `random_forest_flights_*.pkl`       | Random Forest          | Predicción de retrasos en transporte aéreo      | ✅ Activo |
+| `decision_tree_acv_*.pkl`           | Decision Tree          | Evaluación de riesgo médico                      | ✅ Activo |
+| `bitcoin_random_forest_*.pkl`       | Random Forest          | Predicción de criptomonedas (versión anterior)  | 📦 Legacy |
 
-## Requisitos
+### Tecnologías de ML Implementadas
+- **Series Temporales**: Prophet para análisis de tendencias y estacionalidad
+- **Gradient Boosting**: CatBoost para manejo de features categóricas
+- **Ensemble Methods**: Random Forest para robustez predictiva
+- **Sistemas de Recomendación**: KNN con métricas de similitud personalizadas
+- **Árboles de Decisión**: Interpretabilidad para dominio médico
 
-- Python 3.9+ (recomendado)
-- pip, virtualenv (o venv)
-- Node.js + npm (para el frontend)
-- macOS: Homebrew (para instalar Ollama si se usa)
+## Stack Tecnológico
 
-### Dependencias principales nuevas:
-- **Prophet**: Para modelos de series temporales
-- **joblib**: Para carga optimizada de modelos ML
-- **FastAPI**: APIs REST modernas y eficientes
+### Backend & APIs
+- **Python 3.9+**: Lenguaje principal del sistema
+- **FastAPI**: Framework moderno para APIs REST con validación automática
+- **Uvicorn**: Servidor ASGI de alto rendimiento
+- **Pydantic**: Validación de datos y serialización tipo-segura
 
-Instala dependencias Python:
+### Machine Learning
+- **Prophet**: Análisis de series temporales con componentes estacionales
+- **CatBoost**: Gradient boosting con manejo nativo de features categóricas  
+- **Scikit-learn**: Biblioteca estándar para algoritmos ML clásicos
+- **Joblib**: Persistencia optimizada de modelos ML
+- **Pandas & NumPy**: Manipulación y procesamiento de datos
+
+### LLM & Procesamiento de Lenguaje
+- **Ollama**: Runtime local para modelos de lenguaje
+- **LLaMA**: Arquitectura de transformer para comprensión del lenguaje
+- **Extracción de entidades**: Parsing inteligente de parámetros temporales y numéricos
+
+### Monitoreo & Logging
+- **Sistema de logging centralizado**: Configuración unificada con rotación automática
+- **Métricas de rendimiento**: Tracking de timing y throughput por endpoint
+- **Health checks**: Monitoreo automático del estado de modelos
+- **Error handling**: Manejo robusto de excepciones con fallbacks
+
+### Frontend & UI
+- **React**: Framework de interfaz de usuario moderna
+- **TypeScript**: Tipado estático para JavaScript
+- **Vite**: Build tool optimizado para desarrollo
+- **Node.js + npm**: Runtime y gestión de dependencias
+
+## Instalación y Configuración
+
+### Requisitos del Sistema
+- **Python 3.9+** (recomendado 3.11+)
+- **Node.js 16+** y npm
+- **Git** para control de versiones
+- **4GB+ RAM** para modelos ML
+- **macOS/Linux**: Homebrew para dependencias adicionales
+
+### Configuración del Entorno Python
 
 ```bash
+# Clonar repositorio
+git clone https://github.com/SMatey/Mariantonieta-IA.git
+cd Mariantonieta-IA
+
+# Crear entorno virtual
 python3 -m venv venv
-source venv/bin/activate   # macOS / Linux (zsh compatible)
+source venv/bin/activate   # macOS/Linux (zsh compatible)
+
+# Instalar dependencias
 pip install -r requirements.txt
 ```
 
-## Variables de entorno (recomendadas)
+### Variables de Entorno
 
-Exporta estas variables en tu shell o crea un archivo `.env` (no incluir en Git):
+Configura estas variables para personalizar el comportamiento del sistema:
 
 ```bash
-export ENV=development
-export AZURE_FACE_KEY="tu_api_key"
-export AZURE_FACE_ENDPOINT="https://<endpoint>.cognitiveservices.azure.com/"
-export LLM_HOST="http://localhost:8001"
-export API_BASE_URL="http://localhost:8080"
+# Archivo .env (no incluir en Git)
+ENV=development
+AZURE_FACE_KEY="your_api_key"
+AZURE_FACE_ENDPOINT="https://<endpoint>.cognitiveservices.azure.com/"
+LLM_HOST="http://localhost:11434"
+API_BASE_URL="http://localhost:8000"
+LOG_LEVEL="INFO"
+MAX_LOG_SIZE_MB=5
+LOG_BACKUP_COUNT=5
 ```
 
-## Configuración del LLM (opcional: Ollama)
-
-Si quieres correr un LLM local con Ollama (opcional):
+### Configuración del LLM Local (Ollama)
 
 ```bash
 # macOS (Homebrew)
 brew install ollama
-ollama pull llama3:3b
 
-# Ejecutar el modelo para pruebas
-ollama run llama3:3b
+# Iniciar servicio
+ollama serve
+
+# Descargar modelo recomendado
+ollama pull llama3.1:8b
 ```
 
-Dependiendo de tu arquitectura y recursos, puedes elegir otro modelo o servicio. El coordinador LLM del repo asume que hay un endpoint local en `LLM_HOST`.
+## Ejecución del Sistema
 
-## Ejecución — servicios individuales
-
-### 1) Backend (API de modelos) — **Recomendado**
+### Método Unificado (Recomendado)
 
 ```bash
-source venv/bin/activate
-./run_api.sh  # Script optimizado que usa uvicorn correctamente
+# Ejecutar todos los servicios
+chmod +x run_all.sh
+./run_all.sh
 ```
 
-O manualmente:
+### Servicios Individuales
+
+#### 1. API Backend (Puerto 8000)
 ```bash
 source venv/bin/activate
-uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
+./run_api.sh  # Script optimizado con uvicorn
 ```
 
 ### 2) Coordinador LLM
@@ -90,82 +139,190 @@ source venv/bin/activate
 python llm/coordinator.py
 ```
 
-### 3) Frontend (interfaz)
-
+#### 3. Frontend (Puerto 5173)
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
 
-## Nuevas funcionalidades
-
-### 🔮 Predicciones temporales de Bitcoin
-El nuevo modelo Prophet permite consultas como:
-- "¿Cuál será el precio de Bitcoin mañana?"
-- "Predice Bitcoin para la próxima semana"
-- "¿Qué precio tendrá Bitcoin el 1 de enero de 2025?"
-
-### 🤖 Coordinador inteligente mejorado
-- Extracción automática de fechas y parámetros
-- Respuestas contextuales según el tipo de modelo
-- Manejo de errores y respaldos automáticos
-
-## Script unificado (run_all.sh)
-
-Hay un script de conveniencia `run_all.sh` que arranca los componentes en segundo plano:
+### Verificación del Sistema
 
 ```bash
-chmod +x run_all.sh
-./run_all.sh
+# Health checks de las APIs
+curl http://localhost:8000/health      # API principal
+curl http://localhost:8000/models/bitcoin/health
+curl http://localhost:8000/models/avocado/health
+
+# Estado del LLM
+curl http://localhost:11434/api/tags   # Ollama models
 ```
 
-El script incluye:
-- ✅ Activación automática del entorno virtual
-- ✅ Inicio de la API optimizada con `uvicorn`
-- ✅ Configuración correcta de puertos y hosts
-- ✅ Manejo de errores y dependencias
+## Capacidades del Sistema
 
-## Estructura del proyecto
+### Procesamiento de Lenguaje Natural
+- **Extracción temporal**: Reconocimiento automático de fechas relativas y absolutas
+- **Parsing de parámetros**: Identificación inteligente de valores numéricos y categorías
+- **Contextualización**: Interpretación de consultas ambiguas con context-awareness
+- **Respuestas explicativas**: Generación de interpretaciones detalladas de resultados
+
+### APIs de Predicción Disponibles
+- **Análisis temporal**: Predicciones de series de tiempo con intervalos de confianza
+- **Commodities agrícolas**: Predicción de precios con features de mercado
+- **Sistemas de recomendación**: Filtrado colaborativo y por contenido
+- **Análisis de riesgo**: Evaluación probabilística en dominios médicos
+- **Transporte aéreo**: Predicción de retrasos con factores meteorológicos
+
+### Arquitectura de Microservicios
+- **Escalabilidad horizontal**: Cada modelo puede escalarse independientemente
+- **Tolerancia a fallos**: Fallbacks automáticos y circuit breakers
+- **Load balancing**: Distribución de carga entre instancias
+- **Versionado**: Soporte para múltiples versiones de modelos simultáneamente
+
+## Arquitectura del Sistema
 
 ```
 proyecto/
-├── api/                     # 🔥 APIs REST para modelos ML
-│   ├── main.py             # Entrada principal de la API
-│   ├── constants.py        # 🆕 Constantes centralizadas
-│   ├── routes/             # Rutas específicas por modelo
-│   │   ├── bitcoin_api.py  # 🔮 API Prophet para Bitcoin
-│   │   ├── movies_api.py   # 🎬 API recomendaciones
-│   │   └── properties_api.py # 🏠 API predicción propiedades
-│   └── core/               # Configuración central
-├── llm/                    # 🧠 Coordinador LLM mejorado
-│   └── coordinator.py      # 🆕 Coordinador con extracción inteligente
-├── frontend/               # 💻 Interfaz React
-├── models/                 # 🤖 Modelos ML entrenados
-│   ├── prophet_bitcoin_v2_*.pkl  # 🆕 Modelo Prophet
-│   ├── knn_movie_*.pkl           # Recomendaciones
-│   └── random_forest_*.pkl       # Otros modelos
-├── data/                   # 📊 Datasets
-├── notebooks/              # 📚 Análisis exploratorio
-└── tests/                  # 🧪 Pruebas automatizadas
+├── api/                           # 🔥 Microservicios REST
+│   ├── main.py                   # Coordinador principal de APIs
+│   ├── config_logger.py          # Sistema de logging centralizado
+│   ├── constants.py              # Configuración centralizada
+│   ├── routes/                   # Endpoints por dominio
+│   │   ├── bitcoin_api.py        # API de criptomonedas
+│   │   ├── avocado_api.py        # API de commodities agrícolas
+│   │   ├── movies_api.py         # API de recomendaciones
+│   │   ├── flights_api.py        # API de transporte aéreo
+│   │   └── acv_api.py            # API médica de riesgo
+│   └── models/                   # Esquemas Pydantic
+├── llm/                          # 🧠 Coordinador LLM
+│   ├── coordinator.py            # Orquestador inteligente
+│   └── extract_params.py        # Extracción de parámetros NLP
+├── ml_models/                    # 🤖 Modelos ML serializados
+│   ├── prophet_bitcoin_v2_*.pkl  # Series temporales
+│   ├── catboost_avocado_*.pkl    # Gradient boosting
+│   └── *.pkl                     # Otros modelos entrenados
+├── logs/                         # 📋 Sistema de logging
+│   ├── main_api.log              # Log del coordinador
+│   ├── *_api.log                 # Logs por microservicio
+│   └── README.md                 # Documentación de logs
+├── frontend/                     # 💻 Interfaz React
+│   ├── src/components/           # Componentes UI
+│   └── package.json              # Dependencias frontend
+├── data/                         # 📊 Datasets y ejemplos
+├── notebooks/                    # 📚 Análisis exploratorio
+└── tests/                        # 🧪 Suite de pruebas
 ```
 
-## Solución de problemas común
+### Flujo de Datos
+1. **Usuario** → Frontend React
+2. **Frontend** → Coordinador LLM (puerto 8001)
+3. **Coordinador** → Extracción de parámetros NLP
+4. **Coordinador** → API específica (puerto 8000)
+5. **API** → Modelo ML + Logging
+6. **Respuesta** → Usuario con interpretación
 
-- "ModuleNotFoundError" — activa el venv y reinstala dependencias: `pip install -r requirements.txt`.
-- Problemas con Ollama — verificar versión y que el servicio esté corriendo: `ollama ps` / `ollama logs`.
-- Frontend no arranca — revisa `node` y `npm` instalados, luego `npm install` y `npm run dev`.
+## Monitoreo y Debugging
 
-## Buenas prácticas
+### Sistema de Logging
+- **Logging centralizado**: Configuración unificada en `api/config_logger.py`
+- **Rotación automática**: Archivos de máximo 5MB con 5 backups
+- **Niveles configurables**: INFO, ERROR, WARNING, DEBUG
+- **Sin output en consola**: Logs exclusivamente en archivos para interfaces limpias
 
-- Mantén credenciales fuera del repositorio (.env en .gitignore).
-- Versiona modelos con nombres que incluyan versión y fecha cuando sean reentrenados.
+### Métricas de Rendimiento
+```bash
+# Monitoreo en tiempo real
+tail -f logs/main_api.log logs/bitcoin_api.log
+
+# Análisis de errores
+grep "ERROR" logs/*.log
+
+# Estadísticas de predicciones
+grep "Prediction" logs/*_api.log | wc -l
+```
+
+### Health Checks Automatizados
+- **Estado de modelos**: Verificación de carga exitosa
+- **Conectividad LLM**: Pruebas de comunicación con Ollama
+- **Métricas de memoria**: Uso de recursos por modelo
+- **Endpoints de diagnóstico**: `/health` en cada microservicio
+
+## Troubleshooting
+
+### Problemas Comunes
+
+#### Errores de Dependencias
+```bash
+# ModuleNotFoundError
+source venv/bin/activate
+pip install -r requirements.txt --upgrade
+
+# Verificar instalación
+python -c "import fastapi, prophet, catboost; print('✅ Dependencies OK')"
+```
+
+#### Problemas con Ollama
+```bash
+# Verificar estado del servicio
+ollama ps
+ollama list
+
+# Logs de Ollama
+tail -f ~/.ollama/logs/server.log
+
+# Reiniciar servicio
+pkill ollama && ollama serve
+```
+
+#### Issues del Frontend
+```bash
+# Limpiar cache y reinstalar
+cd frontend
+rm -rf node_modules package-lock.json
+npm install
+npm run dev
+```
+
+### Configuración de Desarrollo
+
+#### Variables de Debug
+```bash
+export LOG_LEVEL="DEBUG"
+export FASTAPI_DEBUG="true"
+export LLM_TIMEOUT="30"
+```
+
+#### Pruebas de Conectividad
+```bash
+# Test API principal
+curl -X GET http://localhost:8000/health | jq
+
+# Test coordinador LLM
+curl -X POST http://localhost:8001/query \
+  -H "Content-Type: application/json" \
+  -d '{"query": "¿Cuál es el precio de Bitcoin?"}'
+```
 
 
-## Contacto y créditos
+## Información del Proyecto
 
-- Autor/es: Sebastian Matey, Liz Salazar, Roosevelt Pérez — Instituto Tecnológico de Costa Rica (Sede San Carlos)
-- Repo: ProyectoIA
+### Equipo de Desarrollo
+- **Sebastian Matey** 
+- **Liz Salazar** 
+- **Roosevelt Pérez** 
+
+### Institución
+**Instituto Tecnológico de Costa Rica (TEC)**  
+Sede San Carlos - Escuela de Ingeniería en Computación
+
+### Tecnologías y Licencias
+- **Repositorio**: Mariantonieta-IA (GitHub)
+- **Licencia**: MIT License
+- **Stack principal**: Python 3.11, FastAPI, React 18, TypeScript
+- **ML Stack**: Prophet, CatBoost, Scikit-learn
+
+**Última actualización**: Octubre 2025  
+
 
 
 
