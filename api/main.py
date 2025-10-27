@@ -57,6 +57,13 @@ except Exception as e:
     print(f"Face API: {e}. (Revisa dependencias de FER/TensorFlow/Azure)")
     FACE_AVAILABLE = False
 
+try:
+    from .stt import router as stt_router
+    STT_AVAILABLE = True
+except ImportError as e:
+    print(f"⚠️  STT Router no disponible: {e}")
+    STT_AVAILABLE = False
+
 app = FastAPI(
     title="AI Models API Hub",
     description="API centralizada para múltiples modelos de Machine Learning",
@@ -90,6 +97,9 @@ if AVOCADO_AVAILABLE:
 
 if FACE_AVAILABLE:
     app.include_router(face_routes.router)
+
+if STT_AVAILABLE:
+    app.include_router(stt_router)
 
 @app.get("/", response_model=HealthResponse)
 def root():
