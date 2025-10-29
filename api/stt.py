@@ -20,7 +20,6 @@ APP_NAME = "Mariantonieta-IA STT"
 DEFAULT_LANGUAGE = os.getenv("GCP_SPEECH_LANGUAGE", "es-CR")
 DEFAULT_ENCODING = os.getenv("GCP_SPEECH_ENCODING", "LINEAR16").upper()
 
-# ⬇️ Ahora usamos un APIRouter en vez de FastAPI(app)
 router = APIRouter(prefix="/stt", tags=["speech-to-text"])
 
 
@@ -79,7 +78,7 @@ def _make_speech_client() -> speech.SpeechClient:
         creds = service_account.Credentials.from_service_account_file(sa_path)
         return speech.SpeechClient(credentials=creds)
 
-    # Fallback (solo funcionará dentro de GCP con ADC configurado)
+    # Fallback (solo funciona dentro de GCP con ADC configurado)
     return speech.SpeechClient()
 
 
