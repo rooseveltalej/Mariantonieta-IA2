@@ -30,3 +30,4 @@ ml_models/flight_delay_v1_2025-10-25.pkl
 logs/*.log
 
 dl_models/asr/mariantonieta_asr_ctc.h5
+audio/uploads/*
