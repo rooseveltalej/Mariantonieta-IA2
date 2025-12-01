@@ -14,14 +14,19 @@ class EmotionRecognitionService:
         self.model_path = model_path
         self.model = None
         self.face_cascade = None
-        self.emotion_labels = ['interested', 'neutral', 'disappointed']
+        # Usar las emociones reales del modelo entrenado (FER2013)
+        self.emotion_labels = ['angry', 'disgust', 'fear', 'happy', 'neutral', 'sad', 'surprise']
         self.img_size = (224, 224)
         
-        # Mapeo de emociones para compatibilidad con Google Vision API
+        # Mapeo simplificado - usar directamente las emociones del modelo
         self.emotion_mapping = {
-            'interested': 'joy',      # interested -> joy
-            'neutral': 'neutral',     # neutral -> neutral (nuevo)
-            'disappointed': 'sorrow'  # disappointed -> sorrow
+            'angry': 'anger',
+            'disgust': 'disgust', 
+            'fear': 'fear',
+            'happy': 'joy',
+            'neutral': 'neutral',
+            'sad': 'sorrow',
+            'surprise': 'surprise'
         }
         
         # Mapeo inverso para scoring
@@ -222,13 +227,16 @@ class EmotionRecognitionService:
             if our_emotion in emotion_scores and google_emotion in google_scores:
                 google_scores[google_emotion] = emotion_scores[our_emotion]
         
-        # Si es neutral, distribuir un poco entre las emociones
+        # Si es neutral, mantener el mapeo correcto sin fallback forzado
         if best_emotion_key == 'neutral':
-            # Para neutral, dar scores bajos a todas las emociones
-            base_score = emotion_scores['neutral'] * 0.2  # 20% del score de neutral
-            google_scores = {emotion: base_score for emotion in google_scores}
-            best_emotion_mapped = 'joy'  # Default para neutral
-            best_score = base_score
+            # Para neutral, usar el mapeo definido (surprise) y distribuir scores
+            base_score = emotion_scores['neutral'] * 0.3  # 30% del score de neutral
+            google_scores['surprise'] = emotion_scores['neutral']  # Score principal a surprise
+            google_scores['joy'] = base_score
+            google_scores['sorrow'] = base_score
+            google_scores['anger'] = base_score * 0.5  # Menos anger para neutral
+            best_emotion_mapped = 'surprise'  # Neutral se mapea a surprise
+            best_score = emotion_scores['neutral']
         
         # Asegurar que ningún score sea exactamente 0 para evitar "UNKNOWN"
         for emotion in google_scores:
@@ -251,29 +259,56 @@ class EmotionRecognitionService:
             'original_scores': emotion_scores
         }
     def _predict_emotion(self, face_img: np.ndarray) -> Dict[str, Any]:
-        """Predice la emoción de un rostro y devuelve formato compatible"""
+        """Predice la emoción de un rostro y devuelve todas las probabilidades"""
         try:
-            # Preprocesar la imagen
-            preprocessed = self._preprocess_face(face_img)
+            # Preprocesar la imagen para MobileNetV3
+            face_resized = cv2.resize(face_img, self.img_size)
+            face_rgb = cv2.cvtColor(face_resized, cv2.COLOR_BGR2RGB)
+            face_normalized = face_rgb.astype(np.float32)
+            face_batch = np.expand_dims(face_normalized, axis=0)
+            
+            # Preprocesamiento específico de MobileNetV3
+            face_preprocessed = tf.keras.applications.mobilenet_v3.preprocess_input(face_batch)
             
             # Hacer predicción
-            prediction = self.model.predict(preprocessed, verbose=0)
-            
-            # Obtener probabilidades
+            prediction = self.model.predict(face_preprocessed, verbose=0)
             probabilities = prediction[0]
             
-            # Crear diccionario de scores originales
-            emotion_scores = {}
+            # Crear diccionario con todas las probabilidades
+            all_emotions = {}
             for i, label in enumerate(self.emotion_labels):
-                emotion_scores[label] = float(probabilities[i])
+                all_emotions[label] = float(probabilities[i])
             
-            # Crear respuesta compatible con Google Vision
-            compatible_response = self._create_google_compatible_response(emotion_scores)
+            # Encontrar la emoción con mayor probabilidad
+            best_emotion_idx = np.argmax(probabilities)
+            best_emotion = self.emotion_labels[best_emotion_idx]
+            best_score = float(probabilities[best_emotion_idx])
             
-            return compatible_response
+            # Para compatibilidad con Google Vision, crear estructura simple
+            google_compatible = {
+                'joy': all_emotions.get('happy', 0.0),
+                'sorrow': all_emotions.get('sad', 0.0),
+                'anger': all_emotions.get('angry', 0.0),
+                'surprise': all_emotions.get('surprise', 0.0)
+            }
+            
+            # Convertir a likelihood text
+            likelihoods = {}
+            for emotion, score in google_compatible.items():
+                likelihoods[emotion] = self._score_to_likelihood_text(score)
+            
+            return {
+                'likelihoods': likelihoods,
+                'best_emotion': {
+                    'label': self.emotion_mapping.get(best_emotion, best_emotion),
+                    'score': best_score
+                },
+                'all_emotions_detailed': all_emotions,  # ¡AQUÍ ESTÁN TODAS LAS PROBABILIDADES!
+                'raw_prediction': best_emotion
+            }
             
         except Exception as e:
-            # Respuesta de error compatible
+            # Respuesta de error
             return {
                 'likelihoods': {
                     'joy': 'UNKNOWN',
@@ -281,9 +316,8 @@ class EmotionRecognitionService:
                     'anger': 'UNKNOWN',
                     'surprise': 'UNKNOWN'
                 },
-                'best_emotion': {'label': 'joy', 'score': 0.0},
-                'google_scores': {'joy': 0.0, 'sorrow': 0.0, 'anger': 0.0, 'surprise': 0.0},
-                'original_scores': {'interested': 0.0, 'neutral': 0.0, 'disappointed': 0.0},
+                'best_emotion': {'label': 'neutral', 'score': 0.0},
+                'all_emotions_detailed': {emotion: 0.0 for emotion in self.emotion_labels},
                 'error': str(e)
             }
 
@@ -337,17 +371,19 @@ def detect_faces_with_keras(image_stream: io.BytesIO) -> List[Dict[str, Any]]:
             # Predecir emoción
             emotion_result = service._predict_emotion(face_roi)
             
-            # Formatear resultado 100% compatible con Google Vision API
+            # Formatear resultado con probabilidades detalladas
             faces_result.append({
                 "detection_source": "keras_custom_model",
                 "position": face_box,
                 "likelihoods": emotion_result["likelihoods"],
                 "best_emotion": emotion_result["best_emotion"],
-                # Información adicional para debugging (opcional)
+                # ¡AQUÍ ESTÁN LAS PROBABILIDADES DETALLADAS QUE QUIERES!
+                "detailed_probabilities": emotion_result["all_emotions_detailed"],
+                "raw_prediction": emotion_result.get("raw_prediction", "unknown"),
                 "model_info": {
-                    "original_emotions": emotion_result.get("original_scores", {}),
-                    "architecture": "EfficientNetB3-Custom",
-                    "confidence": emotion_result["best_emotion"]["score"]
+                    "architecture": "MobileNetV3-Custom",
+                    "confidence": emotion_result["best_emotion"]["score"],
+                    "total_classes": len(service.emotion_labels)
                 }
             })
         
